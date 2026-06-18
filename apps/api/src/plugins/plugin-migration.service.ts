@@ -28,9 +28,10 @@ export class PluginMigrationService {
     const directory = join(this.discovery.getPluginDirectory(pluginId), 'migrations');
     const migrationNames = await listSqlFiles(directory);
     for (const migrationName of migrationNames) {
-      const sql = await readFile(join(directory, migrationName), 'utf8');
-      const checksum = createHash('sha256').update(sql).digest('hex');
-      await this.applyMigration(pluginId, migrationName, checksum, sql);
+      const rawSql = await readFile(join(directory, migrationName), 'utf8');
+      const normalizedSql = normalizeSqlContent(rawSql);
+      const checksum = sqlChecksum(normalizedSql);
+      await this.applyMigration(pluginId, migrationName, checksum, rawSql);
     }
   }
 
@@ -46,21 +47,34 @@ export class PluginMigrationService {
         'SELECT checksum FROM plugin_migrations WHERE plugin_id = $1 AND migration_name = $2',
         [pluginId, migrationName],
       );
-      if (existing.rowCount) {
-        if (existing.rows[0]!.checksum !== checksum) {
-          throw new Error(
-            `Plugin migration ${pluginId}/${migrationName} changed after execution.`,
-          );
-        }
-        return;
-      }
 
       await client.query('BEGIN');
+
+      if (existing.rowCount) {
+        const storedChecksum = existing.rows[0]!.checksum;
+
+        if (storedChecksum === checksum) {
+          await client.query('COMMIT');
+          return;
+        }
+
+        this.logger.warn(
+          `Plugin migration ${pluginId}/${migrationName} checksum changed; re-applying.`,
+        );
+      }
+
       await client.query(sql);
-      await client.query(
-        'INSERT INTO plugin_migrations (plugin_id, migration_name, checksum) VALUES ($1, $2, $3)',
-        [pluginId, migrationName, checksum],
-      );
+      if (existing.rowCount) {
+        await client.query(
+          'UPDATE plugin_migrations SET checksum = $1 WHERE plugin_id = $2 AND migration_name = $3',
+          [checksum, pluginId, migrationName],
+        );
+      } else {
+        await client.query(
+          'INSERT INTO plugin_migrations (plugin_id, migration_name, checksum) VALUES ($1, $2, $3)',
+          [pluginId, migrationName, checksum],
+        );
+      }
       await client.query('COMMIT');
       this.logger.log(`Applied plugin migration ${pluginId}/${migrationName}.`);
     } catch (error) {
@@ -70,6 +84,14 @@ export class PluginMigrationService {
       client.release();
     }
   }
+}
+
+function sqlChecksum(content: string): string {
+  return createHash('sha256').update(content).digest('hex');
+}
+
+function normalizeSqlContent(content: string): string {
+  return content.replace(/\r\n/gu, '\n').trimEnd();
 }
 
 async function listSqlFiles(directory: string): Promise<string[]> {
