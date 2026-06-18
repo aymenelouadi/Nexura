@@ -1,0 +1,19 @@
+{
+  "$schema": "https://ui.shadcn.com/schema.json",
+  "style": "nova",
+  "rsc": false,
+  "tsx": true,
+  "tailwind": {
+    "css": "../../apps/dashboard/src/styles.css",
+    "baseColor": "neutral",
+    "cssVariables": true
+  },
+  "iconLibrary": "lucide",
+  "aliases": {
+    "components": "@nexura/ui",
+    "utils": "@nexura/ui",
+    "ui": "@nexura/ui",
+    "lib": "@nexura/ui",
+    "hooks": "@nexura/ui"
+  }
+}
