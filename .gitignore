@@ -37,5 +37,6 @@ coverage/
 # Agents
 .agents/
 
-# Plugins (proprietary)
-plugins/
+# Plugins (proprietary — README is public, plugin code is not)
+plugins/*/
+!plugins/README.md
