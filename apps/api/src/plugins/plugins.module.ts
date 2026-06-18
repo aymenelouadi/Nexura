@@ -10,6 +10,7 @@ import { PluginMigrationService } from './plugin-migration.service.js';
 import { PluginRepository } from './plugin.repository.js';
 import { PluginsController } from './plugins.controller.js';
 import { PluginTestService } from './plugin-test.service.js';
+import { PluginUploadService } from './plugin-upload.service.js';
 
 @Module({
   imports: [AuthModule, GuildsModule, ActivityModule],
@@ -21,6 +22,7 @@ import { PluginTestService } from './plugin-test.service.js';
     PluginMigrationService,
     PluginRepository,
     PluginTestService,
+    PluginUploadService,
   ],
   exports: [PluginCoreRepository, PluginManager, PluginTestService],
 })

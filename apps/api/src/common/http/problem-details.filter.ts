@@ -65,6 +65,20 @@ export class ProblemDetailsFilter implements ExceptionFilter {
 
   private createHttpProblem(error: HttpException, request: Request) {
     const status = error.getStatus();
+    const response = error.getResponse();
+
+    if (typeof response === 'object' && response !== null && 'error' in response) {
+      return {
+        type: `https://nexura.dev/problems/${getProblemSlug(status)}`,
+        title: getProblemTitle(status),
+        status,
+        detail: (response.error as { message?: string }).message ?? 'Plugin operation failed.',
+        instance: request.originalUrl,
+        requestId: request.requestId,
+        ...response,
+      };
+    }
+
     const detail = getHttpExceptionDetail(error);
 
     return {

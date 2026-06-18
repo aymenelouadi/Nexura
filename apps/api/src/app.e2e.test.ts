@@ -7,6 +7,8 @@ import { SettingsRepository } from './settings/settings.repository.js';
 import { SettingsUploadService, type UploadedFile, type ProcessedUpload } from './settings/settings-upload.service.js';
 import { ActivityService } from './activity/activity.service.js';
 import { PluginManager } from './plugins/plugin-manager.service.js';
+import { GuildsService } from './guilds/guilds.service.js';
+import { GuildAccessService } from './guilds/guild-access.service.js';
 import { AppModule } from './app.module.js';
 import { appSettingsSchema, type AppSettings, type ActivityEventListResponse, type ActivityQuery } from '@nexura/types';
 import type { ApiEnvironment } from '@nexura/shared';
@@ -73,7 +75,24 @@ const mockPluginManager = {
   getManifest: () => undefined,
   listPlugins: async () => [],
   listDashboards: async () => [],
+  getPluginStatus: vi.fn().mockResolvedValue({ id: 'welcome', enabled: false }),
+  enablePlugin: vi.fn().mockResolvedValue({ id: 'welcome', name: 'Welcome', enabled: true }),
+  disablePlugin: vi.fn().mockResolvedValue({ id: 'welcome', name: 'Welcome', enabled: false }),
+  listPluginLogs: vi.fn().mockResolvedValue([]),
 };
+
+class MockGuildAccessService {
+  getConnectedGuild = vi.fn().mockResolvedValue({
+    id: '1111111111111111111',
+    name: 'Test Guild',
+    botConnected: true,
+  });
+  getManageableGuild = vi.fn().mockResolvedValue({
+    id: '1111111111111111111',
+    name: 'Test Guild',
+    canManage: true,
+  });
+}
 
 const mockEnvironment: ApiEnvironment = {
   NODE_ENV: 'test',
@@ -90,14 +109,32 @@ const mockEnvironment: ApiEnvironment = {
   DASHBOARD_URL: 'http://localhost:5173',
 };
 
+class MockGuildsService {
+  listGuilds = vi.fn().mockResolvedValue({ data: [] });
+  getGuild = vi.fn().mockResolvedValue({
+    id: '1111111111111111111',
+    name: 'Test Guild',
+    icon: null,
+    canManage: true,
+    isOwner: true,
+    hasAdmin: false,
+    hasManager: false,
+    botConnected: true,
+    action: 'manage',
+    permissionRole: 'OWNER',
+  });
+}
+
 describe('AppController (e2e)', () => {
   let app: INestApplication;
   let settingsRepository: InMemorySettingsRepository;
   let activityService: MockActivityService;
+  let guildsService: MockGuildsService;
 
   beforeAll(async () => {
     settingsRepository = new InMemorySettingsRepository();
     activityService = new MockActivityService();
+    guildsService = new MockGuildsService();
 
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
       .overrideProvider(API_ENVIRONMENT)
@@ -118,6 +155,10 @@ describe('AppController (e2e)', () => {
       .useValue(activityService)
       .overrideProvider(PluginManager)
       .useValue(mockPluginManager)
+      .overrideProvider(GuildsService)
+      .useValue(guildsService)
+      .overrideProvider(GuildAccessService)
+      .useValue(new MockGuildAccessService())
       .compile();
 
     app = moduleRef.createNestApplication();
@@ -189,6 +230,80 @@ describe('AppController (e2e)', () => {
     });
   });
 
+  describe('Guilds endpoints', () => {
+    it('GET /api/v1/guilds returns guild list', async () => {
+      guildsService.listGuilds.mockResolvedValue({
+        data: [
+          {
+            id: '1111111111111111111',
+            name: 'Test Guild',
+            icon: null,
+            canManage: true,
+            isOwner: true,
+            hasAdmin: false,
+            hasManager: false,
+            botConnected: true,
+            action: 'manage',
+            permissionRole: 'OWNER',
+          },
+        ],
+      });
+
+      const response = await request(app.getHttpServer()).get('/api/v1/guilds').expect(200);
+      expect(response.body.data).toHaveLength(1);
+      expect(response.body.data[0].name).toBe('Test Guild');
+    });
+
+    it('GET /api/v1/guilds returns 401 when Discord authorization is missing', async () => {
+      const { UnauthorizedException } = await import('@nestjs/common');
+      guildsService.listGuilds.mockRejectedValue(
+        new UnauthorizedException('Discord authorization was not found. Please log in again.'),
+      );
+
+      const response = await request(app.getHttpServer()).get('/api/v1/guilds').expect(401);
+      expect(response.body.message).toContain('Discord authorization');
+    });
+
+    it('GET /api/v1/guilds returns 500 with a safe message when Discord API fails', async () => {
+      const { InternalServerErrorException } = await import('@nestjs/common');
+      guildsService.listGuilds.mockRejectedValue(new InternalServerErrorException('Discord unreachable'));
+
+      const response = await request(app.getHttpServer()).get('/api/v1/guilds').expect(500);
+      expect(response.body.message).toContain('Discord unreachable');
+    });
+  });
+
+  describe('Plugins endpoints', () => {
+    it('POST /api/v1/guilds/:guildId/plugins/:pluginId/enable enables a plugin', async () => {
+      const response = await request(app.getHttpServer())
+        .post('/api/v1/guilds/1111111111111111111/plugins/welcome/enable')
+        .expect(200);
+
+      expect(response.body.enabled).toBe(true);
+    });
+
+    it('POST /api/v1/guilds/:guildId/plugins/:pluginId/disable disables a plugin', async () => {
+      const response = await request(app.getHttpServer())
+        .post('/api/v1/guilds/1111111111111111111/plugins/welcome/disable')
+        .expect(200);
+
+      expect(response.body.enabled).toBe(false);
+    });
+
+    it('returns a structured error when enabling a plugin fails', async () => {
+      mockPluginManager.enablePlugin.mockRejectedValueOnce(new Error('Plugin load failed'));
+
+      const response = await request(app.getHttpServer())
+        .post('/api/v1/guilds/1111111111111111111/plugins/welcome/enable')
+        .expect(500);
+
+      expect(response.body.error).toMatchObject({
+        code: 'PLUGIN_ENABLE_FAILED',
+        details: expect.objectContaining({ pluginId: 'welcome' }),
+      });
+    });
+  });
+
   describe('Auth guards', () => {
     it('unauthenticated requests are rejected by SessionAuthGuard', async () => {
       const rejectingGuard: CanActivate = {
@@ -214,6 +329,10 @@ describe('AppController (e2e)', () => {
         .useValue(activityService)
         .overrideProvider(PluginManager)
         .useValue(mockPluginManager)
+        .overrideProvider(GuildsService)
+        .useValue(guildsService)
+        .overrideProvider(GuildAccessService)
+        .useValue(new MockGuildAccessService())
         .compile();
 
       const guardedApp = guardedModule.createNestApplication();

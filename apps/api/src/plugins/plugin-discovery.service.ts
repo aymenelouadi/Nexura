@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { Injectable } from '@nestjs/common';
 import { pluginManifestSchema, type PluginManifest } from '@nexura/types';
 
-const CORE_VERSION = '0.2.5';
+export const CORE_VERSION = '0.2.5';
 const PLUGIN_DIRECTORY = resolve(
   dirname(fileURLToPath(import.meta.url)),
   '..',
@@ -14,6 +14,7 @@ const PLUGIN_DIRECTORY = resolve(
   '..',
   'plugins',
 );
+const INSTALLED_PLUGIN_DIRECTORY = join(PLUGIN_DIRECTORY, 'installed');
 
 @Injectable()
 export class PluginDiscoveryService {
@@ -39,19 +40,35 @@ export class PluginDiscoveryService {
     return join(PLUGIN_DIRECTORY, pluginId);
   }
 
-  private async getPluginDirectories(): Promise<string[]> {
-    try {
-      const entries = await readdir(PLUGIN_DIRECTORY, { withFileTypes: true });
-      return entries
-        .filter((entry) => entry.isDirectory())
-        .map((entry) => join(PLUGIN_DIRECTORY, entry.name))
-        .sort();
-    } catch (error) {
-      if (isMissingDirectory(error)) {
-        return [];
-      }
-      throw error;
+  getInstalledPluginDirectory(pluginId: string): string {
+    if (!/^[a-z][a-z0-9-]{1,63}$/u.test(pluginId)) {
+      throw new Error('Plugin ID is invalid.');
     }
+    return join(INSTALLED_PLUGIN_DIRECTORY, pluginId);
+  }
+
+  private async getPluginDirectories(): Promise<string[]> {
+    const directories: string[] = [];
+
+    const scan = async (root: string, exclude?: Set<string>): Promise<void> => {
+      try {
+        const entries = await readdir(root, { withFileTypes: true });
+        for (const entry of entries) {
+          if (entry.isDirectory() && !exclude?.has(entry.name)) {
+            directories.push(join(root, entry.name));
+          }
+        }
+      } catch (error) {
+        if (!isMissingDirectory(error)) {
+          throw error;
+        }
+      }
+    };
+
+    await scan(PLUGIN_DIRECTORY, new Set(['installed']));
+    await scan(INSTALLED_PLUGIN_DIRECTORY);
+
+    return [...new Set(directories)].sort();
   }
 
   private async readManifest(pluginDirectory: string): Promise<PluginManifest> {

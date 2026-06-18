@@ -1,4 +1,10 @@
-import { Inject, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  Inject,
+  Injectable,
+  InternalServerErrorException,
+  NotFoundException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { guildMembers, guilds, users, type Database } from '@nexura/database';
 import type { GuildDetail, GuildListResponse, GuildSummary, PermissionRole } from '@nexura/types';
 import { and, eq, inArray, notInArray } from 'drizzle-orm';
@@ -36,18 +42,30 @@ export class GuildsService {
   ) {}
 
   async listGuilds(userId: string): Promise<GuildListResponse> {
-    const discordGuilds = await this.getDiscordGuilds(userId);
-    const manageableGuilds = discordGuilds.filter(isManageableDiscordGuild);
-    await this.synchronizePermissionMappings(userId, manageableGuilds);
-    const connectedGuildIds = await this.getConnectedGuildIds(discordGuilds);
+    try {
+      const discordGuilds = await this.getDiscordGuilds(userId);
+      const manageableGuilds = discordGuilds.filter(isManageableDiscordGuild);
+      await this.synchronizePermissionMappings(userId, manageableGuilds);
+      const connectedGuildIds = await this.getConnectedGuildIds(discordGuilds);
 
-    return {
-      data: discordGuilds
-        .map(({ guild, permission }) =>
-          this.toGuildSummary(guild, permission, connectedGuildIds.has(guild.id)),
-        )
-        .sort((left, right) => left.name.localeCompare(right.name)),
-    };
+      return {
+        data: discordGuilds
+          .map(({ guild, permission }) =>
+            this.toGuildSummary(guild, permission, connectedGuildIds.has(guild.id)),
+          )
+          .sort((left, right) => left.name.localeCompare(right.name)),
+      };
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw new UnauthorizedException(
+          'Discord authorization was not found. Please log in again.',
+        );
+      }
+      if (error instanceof UnauthorizedException || error instanceof InternalServerErrorException) {
+        throw error;
+      }
+      throw new InternalServerErrorException('Failed to load guild list.');
+    }
   }
 
   async getGuild(userId: string, guildId: string): Promise<GuildDetail> {

@@ -1,0 +1,284 @@
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+} from '@nestjs/common';
+import AdmZip from 'adm-zip';
+import { copyFile, mkdir, readdir, readFile, rm, stat } from 'node:fs/promises';
+import { dirname, join, normalize } from 'node:path';
+import type { PluginManifest } from '@nexura/types';
+import semver from 'semver';
+
+import { PluginDiscoveryService } from './plugin-discovery.service.js';
+import { PluginManager } from './plugin-manager.service.js';
+import { PluginMigrationService } from './plugin-migration.service.js';
+import { PluginRepository } from './plugin.repository.js';
+
+const ALLOWED_PLUGIN_ID = /^[a-z0-9-_]+$/u;
+const RESERVED_PLUGIN_IDS = new Set([
+  'core',
+  'system',
+  'nexura',
+  'api',
+  'dashboard',
+  'bot',
+  'database',
+  'shared',
+  'types',
+  'ui',
+  'node_modules',
+  'installed',
+]);
+const MAX_PLUGIN_SIZE_BYTES = 50 * 1024 * 1024;
+const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
+
+interface MulterFile {
+  fieldname: string;
+  originalname: string;
+  encoding: string;
+  mimetype: string;
+  size: number;
+  destination: string;
+  filename: string;
+  path: string;
+  buffer: Buffer;
+}
+
+@Injectable()
+export class PluginUploadService {
+  constructor(
+    private readonly pluginDiscoveryService: PluginDiscoveryService,
+    private readonly pluginManager: PluginManager,
+    private readonly pluginRepository: PluginRepository,
+    private readonly pluginMigrationService: PluginMigrationService,
+  ) {}
+
+  async upload(file: MulterFile, guildId: string): Promise<PluginManifest> {
+    this.validateArchiveFile(file);
+
+    const tempDir = join(dirname(file.path), `extract-${Date.now()}`);
+    try {
+      await this.extractArchive(file.path, tempDir);
+      const sourceDir = await this.findPluginRoot(tempDir);
+      await this.validateFileTree(sourceDir);
+
+      const manifest = await this.readAndValidateManifest(sourceDir);
+      const targetDir = this.getInstalledPluginDirectory(manifest.id);
+
+      await this.ensureSafeInstall(targetDir, manifest);
+      await this.copyPluginFiles(sourceDir, targetDir);
+      await this.registerPlugin(manifest, guildId);
+      await this.pluginMigrationService.apply([manifest]);
+      await this.pluginManager.reloadManifests();
+
+      return manifest;
+    } finally {
+      await rm(tempDir, { recursive: true, force: true }).catch(() => {});
+      await rm(file.path, { force: true }).catch(() => {});
+    }
+  }
+
+  private validateArchiveFile(file: MulterFile): void {
+    if (!file) {
+      throw new BadRequestException('No plugin archive was provided.');
+    }
+
+    if (file.size > MAX_PLUGIN_SIZE_BYTES) {
+      throw new BadRequestException(
+        `Plugin archive exceeds the maximum size of ${MAX_PLUGIN_SIZE_BYTES / 1024 / 1024} MB.`,
+      );
+    }
+
+    const extension = file.originalname.toLowerCase().split('.').pop();
+    if (extension !== 'zip' && extension !== 'nexura-plugin') {
+      throw new BadRequestException(
+        'Plugin archive must be a .zip or .nexura-plugin file.',
+      );
+    }
+  }
+
+  private async extractArchive(archivePath: string, targetDir: string): Promise<void> {
+    try {
+      await mkdir(targetDir, { recursive: true });
+      const zip = new AdmZip(archivePath);
+      const entries = zip.getEntries();
+
+      for (const entry of entries) {
+        if (entry.isDirectory) continue;
+
+        if (entry.entryName.includes('..') || entry.entryName.startsWith('/')) {
+          throw new BadRequestException('Plugin archive contains unsafe file paths.');
+        }
+
+        if (entry.header.size > MAX_FILE_SIZE_BYTES) {
+          throw new BadRequestException(
+            `File ${entry.entryName} exceeds the maximum size of ${MAX_FILE_SIZE_BYTES / 1024 / 1024} MB.`,
+          );
+        }
+      }
+
+      zip.extractAllTo(targetDir, true);
+    } catch (error) {
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+      throw new BadRequestException('Failed to extract plugin archive.');
+    }
+  }
+
+  private async findPluginRoot(tempDir: string): Promise<string> {
+    const entries = await readdir(tempDir, { withFileTypes: true });
+    const topLevelFolder = entries.find((entry) => entry.isDirectory());
+
+    if (entries.some((entry) => entry.name === 'plugin.json')) {
+      return tempDir;
+    }
+
+    if (topLevelFolder) {
+      const nestedPath = join(tempDir, topLevelFolder.name);
+      const nestedEntries = await readdir(nestedPath);
+      if (nestedEntries.includes('plugin.json')) {
+        return nestedPath;
+      }
+    }
+
+    throw new BadRequestException('Plugin archive is missing plugin.json manifest.');
+  }
+
+  private async validateFileTree(sourceDir: string): Promise<void> {
+    const walk = async (dir: string): Promise<string[]> => {
+      const entries = await readdir(dir, { withFileTypes: true });
+      const paths: string[] = [];
+      for (const entry of entries) {
+        const fullPath = join(dir, entry.name);
+        const relativePath = normalize(fullPath.slice(sourceDir.length + 1));
+        if (entry.isDirectory()) {
+          paths.push(...(await walk(fullPath)));
+        } else {
+          paths.push(relativePath);
+        }
+      }
+      return paths;
+    };
+
+    const files = await walk(sourceDir);
+
+    for (const file of files) {
+      if (file.includes('..') || file.startsWith('/') || file.startsWith('\\')) {
+        throw new BadRequestException(`Unsafe path detected: ${file}`);
+      }
+
+      const lower = file.toLowerCase();
+      const parts = lower.split(/[/\\]/u);
+
+      if (parts.includes('.env') || parts.some((part) => part.startsWith('.env.'))) {
+        throw new BadRequestException(`Plugin archive must not contain .env files: ${file}`);
+      }
+      if (parts.includes('node_modules')) {
+        throw new BadRequestException(`Plugin archive must not contain node_modules: ${file}`);
+      }
+      if (parts.includes('.git')) {
+        throw new BadRequestException(`Plugin archive must not contain .git: ${file}`);
+      }
+      if (/\.(sh|bat|cmd|exe|dll|so|dylib)$/iu.test(file)) {
+        throw new BadRequestException(`Plugin archive must not contain executables: ${file}`);
+      }
+    }
+  }
+
+  private async readAndValidateManifest(sourceDir: string): Promise<PluginManifest> {
+    const manifestPath = join(sourceDir, 'plugin.json');
+    let raw: string;
+    try {
+      raw = await readFile(manifestPath, 'utf8');
+    } catch {
+      throw new BadRequestException('Plugin archive is missing plugin.json manifest.');
+    }
+
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      throw new BadRequestException('plugin.json is not valid JSON.');
+    }
+
+    const manifest = this.pluginDiscoveryService.validateManifest(parsed);
+
+    if (!ALLOWED_PLUGIN_ID.test(manifest.id)) {
+      throw new BadRequestException(
+        `Plugin ID "${manifest.id}" contains unsafe characters. Use only lowercase letters, numbers, hyphens, and underscores.`,
+      );
+    }
+
+    if (RESERVED_PLUGIN_IDS.has(manifest.id)) {
+      throw new BadRequestException(`Plugin ID "${manifest.id}" is reserved.`);
+    }
+
+    if (!semver.valid(manifest.version)) {
+      throw new BadRequestException(`Plugin version "${manifest.version}" is not valid semver.`);
+    }
+
+    const entryPath = join(sourceDir, manifest.entry);
+    try {
+      const entryStat = await stat(entryPath);
+      if (!entryStat.isFile()) {
+        throw new BadRequestException(`Plugin entry "${manifest.entry}" is not a file.`);
+      }
+    } catch {
+      throw new BadRequestException(`Plugin entry "${manifest.entry}" was not found.`);
+    }
+
+    return manifest;
+  }
+
+  private async ensureSafeInstall(targetDir: string, manifest: PluginManifest): Promise<void> {
+    try {
+      const existing = await stat(targetDir);
+      if (existing.isDirectory()) {
+        throw new ConflictException(
+          `Plugin "${manifest.id}" is already installed. Use update instead.`,
+        );
+      }
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+        throw error;
+      }
+    }
+
+    const existingPlugin = await this.pluginRepository.getPlugin(manifest.id).catch(() => null);
+    if (existingPlugin) {
+      throw new ConflictException(
+        `Plugin "${manifest.id}" is already registered. Use update instead.`,
+      );
+    }
+  }
+
+  private async copyPluginFiles(sourceDir: string, targetDir: string): Promise<void> {
+    await mkdir(targetDir, { recursive: true });
+
+    const copyRecursive = async (src: string, dest: string): Promise<void> => {
+      const entries = await readdir(src, { withFileTypes: true });
+      for (const entry of entries) {
+        const srcPath = join(src, entry.name);
+        const destPath = join(dest, entry.name);
+        if (entry.isDirectory()) {
+          await mkdir(destPath, { recursive: true });
+          await copyRecursive(srcPath, destPath);
+        } else {
+          await copyFile(srcPath, destPath);
+        }
+      }
+    };
+
+    await copyRecursive(sourceDir, targetDir);
+  }
+
+  private async registerPlugin(manifest: PluginManifest, guildId: string): Promise<void> {
+    await this.pluginRepository.registerManifest(manifest);
+    await this.pluginRepository.setEnabled(guildId, manifest.id, false);
+  }
+
+  private getInstalledPluginDirectory(pluginId: string): string {
+    return this.pluginDiscoveryService.getInstalledPluginDirectory(pluginId);
+  }
+}

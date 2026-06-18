@@ -97,6 +97,18 @@ export const api = {
     request(`/api/v1/guilds/${encodeURIComponent(guildId)}`, guildDetailSchema),
   getGuildPlugins: (guildId: string) =>
     request(`/api/v1/guilds/${encodeURIComponent(guildId)}/plugins`, guildPluginListResponseSchema),
+  uploadGuildPlugin: (guildId: string, file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return request(
+      `/api/v1/guilds/${encodeURIComponent(guildId)}/plugins/upload`,
+      guildPluginSchema,
+      {
+        method: 'POST',
+        body: formData,
+      },
+    );
+  },
   enableGuildPlugin: (guildId: string, pluginId: string) =>
     request(
       `/api/v1/guilds/${encodeURIComponent(guildId)}/plugins/${encodeURIComponent(pluginId)}/enable`,
@@ -232,6 +244,7 @@ export const api = {
   getGuilds: () => Promise<GuildListResponse>;
   getGuild: (guildId: string) => Promise<GuildDetail>;
   getGuildPlugins: (guildId: string) => Promise<GuildPluginListResponse>;
+  uploadGuildPlugin: (guildId: string, file: File) => Promise<GuildPlugin>;
   enableGuildPlugin: (guildId: string, pluginId: string) => Promise<GuildPlugin>;
   disableGuildPlugin: (guildId: string, pluginId: string) => Promise<GuildPlugin>;
   getGuildPluginLogs: (guildId: string, pluginId: string) => Promise<PluginLogListResponse>;

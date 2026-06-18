@@ -1,5 +1,3 @@
-import { BoxesIcon } from 'lucide-react';
-
 import { useSidebar } from '../state/sidebar-context.js';
 import { Brand } from './brand.js';
 import { useNavigationGroups } from './app-navigation.js';
@@ -46,7 +44,6 @@ export function AppSidebar() {
           collapsed ? 'items-center gap-2' : 'gap-2',
         )}
       >
-        {!collapsed && <OpenSourceCard />}
         {footerGroup && (
           <SidebarNavGroup
             label={footerGroup.label}
@@ -59,22 +56,6 @@ export function AppSidebar() {
         </div>
       </div>
     </aside>
-  );
-}
-
-function OpenSourceCard() {
-  return (
-    <div className="border-b border-border pb-3">
-      <div className="flex items-center gap-3 rounded-[10px] bg-sidebar-accent px-3 py-3">
-        <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
-          <BoxesIcon className="size-4" aria-hidden="true" />
-        </span>
-        <div className="min-w-0">
-          <p className="truncate text-xs font-medium text-sidebar-foreground">Open-source core</p>
-          <p className="truncate text-xs text-muted-foreground">Core runtime 2.5</p>
-        </div>
-      </div>
-    </div>
   );
 }
 

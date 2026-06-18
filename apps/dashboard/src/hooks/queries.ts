@@ -1,6 +1,6 @@
 import { queryOptions } from '@tanstack/react-query';
 
-import { api } from '../lib/api-client.js';
+import { api, ApiError } from '../lib/api-client.js';
 
 export const currentUserQuery = queryOptions({
   queryKey: ['current-user'],
@@ -18,7 +18,13 @@ export const botProfileQuery = queryOptions({
 export const guildsQuery = queryOptions({
   queryKey: ['guilds'],
   queryFn: api.getGuilds,
-  refetchOnWindowFocus: true,
+  refetchOnWindowFocus: false,
+  retry: (failureCount, error) => {
+    if (error instanceof ApiError && (error.status === 401 || error.status >= 500)) {
+      return false;
+    }
+    return failureCount < 2;
+  },
   staleTime: 30_000,
 });
 

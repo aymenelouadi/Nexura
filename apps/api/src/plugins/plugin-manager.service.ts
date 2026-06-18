@@ -1,4 +1,9 @@
-import { Injectable, Logger, type OnApplicationBootstrap } from '@nestjs/common';
+import {
+  Injectable,
+  InternalServerErrorException,
+  Logger,
+  type OnApplicationBootstrap,
+} from '@nestjs/common';
 import type { GuildPlugin, PluginDashboard, PluginLog, PluginLogLevel, PluginManifest } from '@nexura/types';
 
 import { PluginDiscoveryService } from './plugin-discovery.service.js';
@@ -17,9 +22,14 @@ export class PluginManager implements OnApplicationBootstrap {
   ) {}
 
   async onApplicationBootstrap(): Promise<void> {
-    const manifests = await this.discoverInstalledPlugins();
+    const manifests = await this.reloadManifests();
     await this.pluginMigrationService.apply(manifests);
+  }
+
+  async reloadManifests(): Promise<PluginManifest[]> {
+    const manifests = await this.discoverInstalledPlugins();
     this.logger.log(`Registered ${manifests.length} plugin manifest(s).`);
+    return manifests;
   }
 
   discoverInstalledPlugins(): Promise<PluginManifest[]> {
@@ -44,13 +54,19 @@ export class PluginManager implements OnApplicationBootstrap {
     const plugins = await this.listPlugins(guildId);
     const plugin = plugins.find((candidate) => candidate.id === pluginId);
     if (!plugin) {
-      throw new Error(`Plugin ${pluginId} was not returned by the registry.`);
+      throw new InternalServerErrorException(
+        `Plugin ${pluginId} was not returned by the registry.`,
+      );
     }
     return plugin;
   }
 
   async enablePlugin(guildId: string, pluginId: string): Promise<GuildPlugin> {
     await this.pluginRepository.getPlugin(pluginId);
+    const manifest = this.getManifest(pluginId);
+    if (manifest) {
+      await this.pluginMigrationService.apply([manifest]);
+    }
     await this.pluginRepository.setEnabled(guildId, pluginId, true);
     await this.writePluginLog(guildId, pluginId, 'INFO', 'Plugin enabled.', {});
     return this.getPluginStatus(guildId, pluginId);

@@ -4,14 +4,18 @@ import {
   Delete,
   Get,
   HttpCode,
+  HttpException,
   HttpStatus,
   Param,
   Patch,
   Post,
   Put,
   Req,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { isDiscordSnowflake } from '@nexura/shared';
 import {
   commandIdSchema,
@@ -47,7 +51,9 @@ import { ZodValidationPipe } from '../common/http/zod-validation.pipe.js';
 import { GuildAccessService } from '../guilds/guild-access.service.js';
 import { PluginCoreRepository } from './plugin-core.repository.js';
 import { PluginManager } from './plugin-manager.service.js';
+import { PluginOperationException } from './plugin-operation.exception.js';
 import { PluginTestService } from './plugin-test.service.js';
+import { PluginUploadService } from './plugin-upload.service.js';
 
 const guildIdPipe = new ZodValidationPipe(
   z.string().refine(isDiscordSnowflake, 'Guild ID must be a Discord snowflake.'),
@@ -59,6 +65,30 @@ const storageKeyPipe = new ZodValidationPipe(
 );
 const templateNamePipe = new ZodValidationPipe(z.string().min(1).max(100));
 
+interface MulterFile {
+  fieldname: string;
+  originalname: string;
+  encoding: string;
+  mimetype: string;
+  size: number;
+  destination: string;
+  filename: string;
+  path: string;
+  buffer: Buffer;
+}
+
+const pluginUploadInterceptor = FileInterceptor('file', {
+  limits: { fileSize: 50 * 1024 * 1024 },
+  fileFilter: (_request, file, callback) => {
+    const extension = file.originalname.toLowerCase().split('.').pop();
+    if (extension === 'zip' || extension === 'nexura-plugin') {
+      callback(null, true);
+      return;
+    }
+    callback(new Error('Only .zip and .nexura-plugin files are allowed.'), false);
+  },
+});
+
 @Controller('guilds/:guildId/plugins')
 @UseGuards(SessionAuthGuard)
 export class PluginsController {
@@ -68,6 +98,7 @@ export class PluginsController {
     private readonly pluginCoreRepository: PluginCoreRepository,
     private readonly pluginTestService: PluginTestService,
     private readonly activityService: ActivityService,
+    private readonly pluginUploadService: PluginUploadService,
   ) {}
 
   @Get()
@@ -216,6 +247,32 @@ export class PluginsController {
     );
   }
 
+  @Post('upload')
+  @UseGuards(SameOriginGuard)
+  @UseInterceptors(pluginUploadInterceptor)
+  @HttpCode(HttpStatus.OK)
+  async uploadPlugin(
+    @Req() request: Request,
+    @Param('guildId', guildIdPipe) guildId: string,
+    @UploadedFile() file: MulterFile,
+  ): Promise<GuildPlugin> {
+    await this.assertConnectedGuild(request, guildId);
+    const manifest = await this.pluginUploadService.upload(file, guildId);
+    const plugin = await this.pluginManager.getPluginStatus(guildId, manifest.id);
+    await this.activityService.record(request.session.userId!, {
+      guildId,
+      pluginId: manifest.id,
+      action: 'plugin.uploaded',
+      resourceType: 'plugin',
+      resourceId: manifest.id,
+      type: 'plugin.uploaded',
+      message: `Uploaded plugin ${manifest.name} to server ${guildId}`,
+      newValue: { installed: true, enabled: false },
+      metadata: { pluginId: manifest.id, pluginName: manifest.name, guildId },
+    });
+    return plugin;
+  }
+
   @Post(':pluginId/enable')
   @UseGuards(SameOriginGuard)
   @HttpCode(HttpStatus.OK)
@@ -225,19 +282,23 @@ export class PluginsController {
     @Param('pluginId', pluginIdPipe) pluginId: string,
   ): Promise<GuildPlugin> {
     await this.assertConnectedGuild(request, guildId);
-    const plugin = await this.pluginManager.enablePlugin(guildId, pluginId);
-    await this.activityService.record(request.session.userId!, {
-      guildId,
-      pluginId,
-      action: 'plugin.enabled',
-      resourceType: 'plugin',
-      resourceId: pluginId,
-      type: 'plugin.enabled',
-      message: `Enabled plugin ${plugin.name} in server ${guildId}`,
-      newValue: { enabled: true },
-      metadata: { pluginId, pluginName: plugin.name, guildId },
-    });
-    return plugin;
+    try {
+      const plugin = await this.pluginManager.enablePlugin(guildId, pluginId);
+      await this.activityService.record(request.session.userId!, {
+        guildId,
+        pluginId,
+        action: 'plugin.enabled',
+        resourceType: 'plugin',
+        resourceId: pluginId,
+        type: 'plugin.enabled',
+        message: `Enabled plugin ${plugin.name} in server ${guildId}`,
+        newValue: { enabled: true },
+        metadata: { pluginId, pluginName: plugin.name, guildId },
+      });
+      return plugin;
+    } catch (error) {
+      throw this.toPluginOperationError('PLUGIN_ENABLE_FAILED', error, pluginId);
+    }
   }
 
   @Post(':pluginId/disable')
@@ -249,19 +310,23 @@ export class PluginsController {
     @Param('pluginId', pluginIdPipe) pluginId: string,
   ): Promise<GuildPlugin> {
     await this.assertConnectedGuild(request, guildId);
-    const plugin = await this.pluginManager.disablePlugin(guildId, pluginId);
-    await this.activityService.record(request.session.userId!, {
-      guildId,
-      pluginId,
-      action: 'plugin.disabled',
-      resourceType: 'plugin',
-      resourceId: pluginId,
-      type: 'plugin.disabled',
-      message: `Disabled plugin ${plugin.name} in server ${guildId}`,
-      newValue: { enabled: false },
-      metadata: { pluginId, pluginName: plugin.name, guildId },
-    });
-    return plugin;
+    try {
+      const plugin = await this.pluginManager.disablePlugin(guildId, pluginId);
+      await this.activityService.record(request.session.userId!, {
+        guildId,
+        pluginId,
+        action: 'plugin.disabled',
+        resourceType: 'plugin',
+        resourceId: pluginId,
+        type: 'plugin.disabled',
+        message: `Disabled plugin ${plugin.name} in server ${guildId}`,
+        newValue: { enabled: false },
+        metadata: { pluginId, pluginName: plugin.name, guildId },
+      });
+      return plugin;
+    } catch (error) {
+      throw this.toPluginOperationError('PLUGIN_DISABLE_FAILED', error, pluginId);
+    }
   }
 
   @Get(':pluginId/logs')
@@ -285,5 +350,24 @@ export class PluginsController {
   ): Promise<void> {
     await this.assertConnectedGuild(request, guildId);
     await this.pluginManager.getPluginStatus(guildId, pluginId);
+  }
+
+  private toPluginOperationError(
+    code: string,
+    error: unknown,
+    pluginId: string,
+  ): PluginOperationException {
+    if (error instanceof PluginOperationException) {
+      return error;
+    }
+    if (error instanceof HttpException) {
+      const response = error.getResponse();
+      const message = typeof response === 'string' ? response : error.message;
+      return new PluginOperationException(code, message, error.getStatus(), { pluginId });
+    }
+    const message = error instanceof Error ? error.message : 'Plugin operation failed.';
+    return new PluginOperationException(code, message, HttpStatus.INTERNAL_SERVER_ERROR, {
+      pluginId,
+    });
   }
 }
