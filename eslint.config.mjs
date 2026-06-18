@@ -28,6 +28,8 @@ export default tseslint.config(
           allowDefaultProject: [
             'eslint.config.mjs',
             'index.js',
+            'update.js',
+            'vitest.updater.config.js',
             'packages/database/drizzle.config.ts',
             'apps/dashboard/vitest.config.ts',
           ],
@@ -57,6 +59,42 @@ export default tseslint.config(
       '@typescript-eslint/no-unsafe-member-access': 'off',
       '@typescript-eslint/no-unsafe-argument': 'off',
       '@typescript-eslint/no-unsafe-return': 'off',
+    },
+  },
+  {
+    files: ['update.js', 'vitest.updater.config.js', 'src/system/updater/**/*.js'],
+    rules: {
+      '@typescript-eslint/no-unsafe-assignment': 'off',
+      '@typescript-eslint/no-unsafe-call': 'off',
+      '@typescript-eslint/no-unsafe-member-access': 'off',
+      '@typescript-eslint/no-unsafe-argument': 'off',
+      '@typescript-eslint/no-unsafe-return': 'off',
+      '@typescript-eslint/no-var-requires': 'off',
+      '@typescript-eslint/no-require-imports': 'off',
+      '@typescript-eslint/restrict-template-expressions': 'off',
+      '@typescript-eslint/no-unnecessary-condition': 'off',
+      '@typescript-eslint/only-throw-error': 'off',
+      'preserve-caught-error': 'off',
+    },
+  },
+  {
+    files: ['src/system/updater/__tests__/**/*.js'],
+    languageOptions: {
+      globals: {
+        describe: 'readonly',
+        it: 'readonly',
+        expect: 'readonly',
+        beforeEach: 'readonly',
+        afterEach: 'readonly',
+        vi: 'readonly',
+      },
+    },
+    rules: {
+      '@typescript-eslint/no-require-imports': 'off',
+      '@typescript-eslint/require-await': 'off',
+      '@typescript-eslint/unbound-method': 'off',
+      'no-undef': 'off',
+      'preserve-caught-error': 'off',
     },
   },
 );

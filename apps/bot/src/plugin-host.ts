@@ -61,7 +61,7 @@ export class PluginHost {
         const message = error instanceof Error ? error.message : String(error);
         const cause =
           error instanceof Error && 'cause' in error
-            ? (error.cause as Error | undefined)?.message ?? String(error.cause ?? '')
+            ? ((error.cause as Error | undefined)?.message ?? '')
             : '';
         this.refreshFailures += 1;
         this.logger.error({ err: message, cause }, 'Plugin host refresh failed');
@@ -110,7 +110,9 @@ export class PluginHost {
         .select({ guildId: guildPlugins.guildId, pluginId: guildPlugins.pluginId })
         .from(guildPlugins)
         .where(eq(guildPlugins.enabled, true));
-      const desired = new Set(enabled.map(({ guildId, pluginId }) => scopeKey({ guildId, pluginId })));
+      const desired = new Set(
+        enabled.map(({ guildId, pluginId }) => scopeKey({ guildId, pluginId })),
+      );
 
       for (const scope of enabled) {
         const key = scopeKey(scope);
@@ -155,19 +157,17 @@ export class PluginHost {
   private async syncSlashCommands(guildIds: Set<string>): Promise<void> {
     for (const guildId of guildIds) {
       const guild = await this.client.guilds.fetch(guildId);
-      const commands = this.core.commands
-        .listSlashCommands(guildId)
-        .map((command) => ({
-          name: command.name,
-          description: command.description,
-          type: 1,
-          options: command.options.map((option) => ({
-            name: option.name,
-            description: option.description,
-            type: toDiscordOptionType(option.type),
-            required: option.required ?? false,
-          })),
-        })) as unknown as RESTPostAPIChatInputApplicationCommandsJSONBody[];
+      const commands = this.core.commands.listSlashCommands(guildId).map((command) => ({
+        name: command.name,
+        description: command.description,
+        type: 1,
+        options: command.options.map((option) => ({
+          name: option.name,
+          description: option.description,
+          type: toDiscordOptionType(option.type),
+          required: option.required ?? false,
+        })),
+      })) as unknown as RESTPostAPIChatInputApplicationCommandsJSONBody[];
       await guild.commands.set(commands);
     }
   }

@@ -16,13 +16,21 @@
     "lint": "eslint .",
     "start": "node index.js",
     "start:check": "node index.js --check",
-    "test": "turbo run test",
+    "test": "pnpm test:updater && turbo run test",
+    "test:updater": "vitest run --config vitest.updater.config.js src/system/updater",
     "typecheck": "turbo run typecheck",
+    "update:nexura": "node update.js",
     "db:generate": "pnpm --filter @nexura/database db:generate",
     "db:migrate": "pnpm --filter @nexura/database db:migrate",
     "db:studio": "pnpm --filter @nexura/database db:studio"
   },
   "dependencies": {
+    "adm-zip": "0.5.16",
+    "axios": "1.9.0",
+    "chalk": "4.1.2",
+    "fs-extra": "11.3.0",
+    "ora": "5.4.1",
+    "semver": "7.7.2",
     "winston": "3.19.0"
   },
   "devDependencies": {

@@ -352,8 +352,7 @@ describe('sidebar collapse', () => {
   it('AppSidebar renders a collapse toggle button', () => {
     const source = readSource('components/app-sidebar.tsx');
     expect(source).toContain('useSidebar');
-    expect(source).toContain('PanelLeftCloseIcon');
-    expect(source).toContain('PanelLeftOpenIcon');
+    expect(source).toContain('SidebarCollapseButton');
   });
 
   it('DashboardShell shifts layout when sidebar is collapsed', () => {
