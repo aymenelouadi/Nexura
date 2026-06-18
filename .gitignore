@@ -36,3 +36,6 @@ coverage/
 
 # Agents
 .agents/
+
+# Plugins (proprietary)
+plugins/
