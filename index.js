@@ -285,11 +285,8 @@ function isUnavailableLoopback(error) {
 
 async function checkDatabaseConnectivity(databaseUrl) {
   const { Client } = require(path.join(ROOT, 'packages', 'database', 'node_modules', 'pg'));
-  const sslEnabled = /sslmode=(require|verify-full|verify-ca|prefer)/iu.test(databaseUrl);
-  const client = new Client({
-    connectionString: databaseUrl,
-    ...(sslEnabled && { ssl: { rejectUnauthorized: false } }),
-  });
+  const url = databaseUrl.replace(/sslmode=(require|verify-full|verify-ca|prefer)/iu, 'sslmode=no-verify');
+  const client = new Client({ connectionString: url });
 
   try {
     await client.connect();

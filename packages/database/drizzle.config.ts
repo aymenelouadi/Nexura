@@ -5,15 +5,14 @@ if (!process.env.DATABASE_URL) {
 }
 
 const dbUrl = process.env.DATABASE_URL;
-const needsSsl = /sslmode=(require|verify-full|verify-ca|prefer|no-verify)/iu.test(dbUrl);
+const url = dbUrl.replace(/sslmode=(require|verify-full|verify-ca|prefer)/iu, 'sslmode=no-verify');
 
 export default defineConfig({
   dialect: 'postgresql',
   out: './drizzle',
   schema: './src/schema.ts',
   dbCredentials: {
-    url: dbUrl,
-    ...(needsSsl && { ssl: { rejectUnauthorized: false } }),
+    url,
   },
   strict: true,
   verbose: true,
