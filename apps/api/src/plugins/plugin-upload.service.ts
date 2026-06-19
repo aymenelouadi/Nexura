@@ -1,6 +1,6 @@
 import {
   BadRequestException,
-  ConflictException,
+  HttpStatus,
   Injectable,
 } from '@nestjs/common';
 import AdmZip from 'adm-zip';
@@ -98,9 +98,9 @@ export class PluginUploadService {
     }
 
     const extension = file.originalname.toLowerCase().split('.').pop();
-    if (extension !== 'zip' && extension !== 'nexura-plugin') {
+    if (extension !== 'nexura' && extension !== 'codenexus') {
       throw new BadRequestException(
-        'Plugin archive must be a .zip or .nexura-plugin file.',
+        'Plugin archive must be a .nexura or .codenexus file.',
       );
     }
   }
@@ -243,8 +243,11 @@ export class PluginUploadService {
     try {
       const existing = await stat(targetDir);
       if (existing.isDirectory()) {
-        throw new ConflictException(
-          `Plugin "${manifest.id}" is already installed. Use update instead.`,
+        throw new PluginOperationException(
+          'PLUGIN_ALREADY_INSTALLED',
+          `Plugin "${manifest.id}" is already installed.`,
+          HttpStatus.CONFLICT,
+          { pluginId: manifest.id, version: manifest.version, path: targetDir },
         );
       }
     } catch (error) {
@@ -254,9 +257,12 @@ export class PluginUploadService {
     }
 
     const existingPlugin = await this.pluginRepository.getPlugin(manifest.id).catch(() => null);
-    if (existingPlugin) {
-      throw new ConflictException(
-        `Plugin "${manifest.id}" is already registered. Use update instead.`,
+    if (existingPlugin && existingPlugin.version !== manifest.version) {
+      throw new PluginOperationException(
+        'PLUGIN_VERSION_CONFLICT',
+        `Plugin "${manifest.id}" is already registered with version ${existingPlugin.version}.`,
+        HttpStatus.CONFLICT,
+        { pluginId: manifest.id, existingVersion: existingPlugin.version, uploadedVersion: manifest.version },
       );
     }
   }

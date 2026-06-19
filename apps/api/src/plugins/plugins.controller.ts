@@ -92,18 +92,18 @@ const pluginUploadInterceptor = FileInterceptor('file', {
     },
     filename: (_req, file, cb) => {
       const unique = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
-      const ext = file.originalname.toLowerCase().split('.').pop() ?? 'zip';
+      const ext = file.originalname.toLowerCase().split('.').pop() ?? 'nexura';
       cb(null, `${unique}.${ext}`);
     },
   }),
   limits: { fileSize: 50 * 1024 * 1024 },
   fileFilter: (_request, file, callback) => {
     const extension = file.originalname.toLowerCase().split('.').pop();
-    if (extension === 'zip' || extension === 'nexura-plugin') {
+    if (extension === 'nexura' || extension === 'codenexus') {
       callback(null, true);
       return;
     }
-    callback(new Error('Only .zip and .nexura-plugin files are allowed.'), false);
+    callback(new Error('Only .nexura and .codenexus files are allowed.'), false);
   },
 });
 

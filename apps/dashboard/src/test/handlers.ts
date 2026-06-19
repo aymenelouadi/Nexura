@@ -10,13 +10,26 @@ import type {
 } from '@nexura/types';
 
 const baseSettings: AppSettings = {
-  general: { appName: 'Nexura', supportUrl: null, defaultLanguage: 'en' },
+  general: {
+    appName: 'Nexura',
+    appDescription: 'A modular Discord management platform.',
+    supportUrl: null,
+    websiteUrl: null,
+    defaultLanguage: 'en',
+  },
   branding: { logoUrl: null, faviconUrl: null, primaryColor: '#5865f2' },
   appearance: { theme: 'system', sidebarVariant: 'default' },
-  pwa: { enabled: false, shortName: null, themeColor: '#111827', backgroundColor: '#ffffff' },
+  pwa: {
+    enabled: false,
+    installPromptEnabled: false,
+    offlineSupportEnabled: false,
+    shortName: null,
+    themeColor: '#111827',
+    backgroundColor: '#ffffff',
+  },
   debug: { verboseLogging: false, exposePluginApiDocs: false },
   security: { requireEmailVerification: false, sessionDurationHours: 168 },
-  integrations: { discordWebhookUrl: null },
+  integrations: { discordWebhookUrl: null, providers: {} },
   advanced: { enableExperimentalFeatures: false, maxGuildsPerUser: 100 },
 };
 
@@ -92,6 +105,7 @@ export const handlers = [
           id: '1111111111111111111',
           name: 'Test Server',
           icon: null,
+          memberCount: 100,
           canManage: true,
           isOwner: true,
           hasAdmin: false,

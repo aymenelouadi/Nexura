@@ -40,6 +40,7 @@ import {
   SelectValue,
   Skeleton,
   Spinner,
+  Switch,
   Table,
   TableBody,
   TableCell,
@@ -47,7 +48,7 @@ import {
   TableHeader,
   TableRow,
 } from '@nexura/ui';
-import type { GuildPlugin } from '@nexura/types';
+import type { GuildPlugin, GuildPluginListResponse } from '@nexura/types';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   AlertCircleIcon,
@@ -58,8 +59,6 @@ import {
   FilterIcon,
   MoreHorizontalIcon,
   PackageIcon,
-  PowerIcon,
-  PowerOffIcon,
   RefreshCwIcon,
   SearchIcon,
   TrashIcon,
@@ -108,11 +107,23 @@ export function GuildPluginsPage() {
       enabled
         ? api.enableGuildPlugin(guildId, pluginId)
         : api.disableGuildPlugin(guildId, pluginId),
-    onSuccess: async (_data, variables) => {
-      await queryClient.invalidateQueries({ queryKey: ['guilds', guildId, 'plugins'] });
+    onMutate: async (variables) => {
+      await queryClient.cancelQueries({ queryKey: ['guilds', guildId, 'plugins'] });
+      const previous = queryClient.getQueryData<GuildPluginListResponse>(['guilds', guildId, 'plugins']);
+      queryClient.setQueryData<GuildPluginListResponse>(['guilds', guildId, 'plugins'], (current) =>
+        current ? updatePluginInList(current, variables.pluginId, { enabled: variables.enabled }) : current,
+      );
+      return { previous };
+    },
+    onSuccess: async (plugin, variables) => {
+      queryClient.setQueryData<GuildPluginListResponse>(['guilds', guildId, 'plugins'], (current) =>
+        current ? updatePluginInList(current, variables.pluginId, plugin) : current,
+      );
+      await invalidateGuildPluginState(queryClient, guildId);
       toast.success(`Plugin ${variables.enabled ? 'enabled' : 'disabled'}.`);
     },
-    onError: (error: Error) => {
+    onError: (error: Error, _variables, context) => {
+      queryClient.setQueryData(['guilds', guildId, 'plugins'], context?.previous);
       toast.error(error.message || 'Failed to update plugin.');
     },
   });
@@ -120,13 +131,22 @@ export function GuildPluginsPage() {
   const deletePlugin = useMutation({
     mutationFn: ({ pluginId, deleteData }: { pluginId: string; deleteData: boolean }) =>
       api.deleteGuildPlugin(guildId, pluginId, deleteData),
+    onMutate: async ({ pluginId }) => {
+      await queryClient.cancelQueries({ queryKey: ['guilds', guildId, 'plugins'] });
+      const previous = queryClient.getQueryData<GuildPluginListResponse>(['guilds', guildId, 'plugins']);
+      queryClient.setQueryData<GuildPluginListResponse>(['guilds', guildId, 'plugins'], (current) =>
+        current ? { data: current.data.filter((plugin) => plugin.id !== pluginId) } : current,
+      );
+      return { previous };
+    },
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['guilds', guildId, 'plugins'] });
+      await invalidateGuildPluginState(queryClient, guildId);
       toast.success('Plugin deleted.');
       setDeleteTarget(null);
       setDeleteData(false);
     },
-    onError: (error: Error) => {
+    onError: (error: Error, _variables, context) => {
+      queryClient.setQueryData(['guilds', guildId, 'plugins'], context?.previous);
       toast.error(error.message || 'Failed to delete plugin.');
     },
   });
@@ -318,11 +338,7 @@ function PluginManager({
       {
         accessorKey: 'enabled',
         header: 'Enabled',
-        cell: ({ row }) => (
-          <Badge variant={row.original.enabled ? 'success' : 'outline'}>
-            {row.original.enabled ? 'Enabled' : 'Disabled'}
-          </Badge>
-        ),
+        cell: ({ row }) => <PluginEnabledState plugin={row.original} />,
       },
       {
         accessorKey: 'updatedAt',
@@ -502,22 +518,7 @@ function PluginActions({ plugin, pending, onToggle, onManage, onLogs, onDelete }
 
   return (
     <div className="flex items-center justify-end gap-2">
-      <Button
-        size="sm"
-        variant={plugin.enabled ? 'outline' : 'default'}
-        disabled={pending}
-        onClick={onToggle}
-        aria-label={plugin.enabled ? `Disable ${plugin.name}` : `Enable ${plugin.name}`}
-      >
-        {pending ? (
-          <Spinner />
-        ) : plugin.enabled ? (
-          <PowerOffIcon className="mr-1 size-4" />
-        ) : (
-          <PowerIcon className="mr-1 size-4" />
-        )}
-        {pending ? 'Updating' : plugin.enabled ? 'Disable' : 'Enable'}
-      </Button>
+      <PluginSwitch plugin={plugin} pending={pending} onToggle={onToggle} />
 
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
@@ -526,8 +527,8 @@ function PluginActions({ plugin, pending, onToggle, onManage, onLogs, onDelete }
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
-          {plugin.enabled && hasDashboard ? (
-            <DropdownMenuItem onClick={onManage} aria-label={`Manage ${plugin.name}`}>
+          {hasDashboard ? (
+            <DropdownMenuItem disabled={!plugin.enabled} onClick={onManage} aria-label={`Manage ${plugin.name}`}>
               <CogIcon className="mr-2 size-4" />
               Manage
             </DropdownMenuItem>
@@ -603,7 +604,7 @@ function PluginCard({
         </div>
         <div>
           <p className="text-xs text-muted-foreground">Status</p>
-          <p>{plugin.enabled ? 'Enabled' : 'Disabled'}</p>
+          <PluginEnabledState plugin={plugin} />
         </div>
         <div>
           <p className="text-xs text-muted-foreground">Updated</p>
@@ -611,18 +612,9 @@ function PluginCard({
         </div>
       </div>
       <div className="flex flex-wrap gap-2">
-        <Button
-          size="sm"
-          variant={plugin.enabled ? 'outline' : 'default'}
-          disabled={pending}
-          onClick={onToggle}
-          className="flex-1"
-          aria-label={plugin.enabled ? `Disable ${plugin.name}` : `Enable ${plugin.name}`}
-        >
-          {pending ? <Spinner /> : plugin.enabled ? 'Disable' : 'Enable'}
-        </Button>
-        {plugin.enabled && hasDashboard ? (
-          <Button size="sm" variant="outline" onClick={onManage} aria-label={`Manage ${plugin.name}`}>
+        <PluginSwitch plugin={plugin} pending={pending} onToggle={onToggle} />
+        {hasDashboard ? (
+          <Button size="sm" variant="outline" onClick={onManage} disabled={!plugin.enabled} aria-label={`Manage ${plugin.name}`}>
             Manage
           </Button>
         ) : null}
@@ -641,6 +633,56 @@ function PluginCard({
       </div>
     </div>
   );
+}
+
+function PluginEnabledState({ plugin }: { plugin: GuildPlugin }) {
+  return (
+    <Badge variant={plugin.enabled ? 'success' : 'outline'}>
+      {plugin.enabled ? 'Enabled' : 'Disabled'}
+    </Badge>
+  );
+}
+
+function PluginSwitch({ plugin, pending, onToggle }: { plugin: GuildPlugin; pending: boolean; onToggle: () => void }) {
+  return (
+    <div className="flex items-center gap-2">
+      <Switch
+        id={`plugin-${plugin.id}-enabled`}
+        checked={plugin.enabled}
+        onCheckedChange={onToggle}
+        disabled={pending}
+        aria-label={plugin.enabled ? `Disable ${plugin.name}` : `Enable ${plugin.name}`}
+      />
+      {pending ? <Spinner aria-label="Updating plugin" /> : null}
+    </div>
+  );
+}
+
+function updatePluginInList(
+  current: GuildPluginListResponse,
+  pluginId: string,
+  patch: Partial<GuildPlugin>,
+): GuildPluginListResponse {
+  return {
+    data: current.data.map((plugin) => {
+      if (plugin.id !== pluginId) return plugin;
+      const enabled = patch.enabled ?? plugin.enabled;
+      return {
+        ...plugin,
+        ...patch,
+        enabled,
+        guildStatus: enabled ? 'ENABLED' : 'DISABLED',
+      };
+    }),
+  };
+}
+
+async function invalidateGuildPluginState(queryClient: ReturnType<typeof useQueryClient>, guildId: string) {
+  await Promise.all([
+    queryClient.invalidateQueries({ queryKey: ['guilds', guildId, 'plugins'] }),
+    queryClient.invalidateQueries({ queryKey: ['guilds', guildId] }),
+    queryClient.invalidateQueries({ queryKey: ['guilds'] }),
+  ]);
 }
 
 function NoPlugins({ onUpload }: { onUpload: () => void }) {

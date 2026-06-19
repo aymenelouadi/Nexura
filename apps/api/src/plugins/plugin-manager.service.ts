@@ -88,15 +88,20 @@ export class PluginManager implements OnApplicationBootstrap {
   async deletePlugin(guildId: string, pluginId: string, deleteData: boolean): Promise<void> {
     await this.pluginRepository.getPlugin(pluginId);
     await this.pluginRepository.setEnabled(guildId, pluginId, false);
+    await this.writePluginLog(guildId, pluginId, 'INFO', 'Plugin deleted.', { deleteData });
     if (deleteData) {
       await this.pluginRepository.deletePluginData(guildId, pluginId);
     }
     await this.pluginRepository.deleteGuildPlugin(guildId, pluginId);
-    await this.writePluginLog(guildId, pluginId, 'INFO', 'Plugin deleted.', { deleteData });
     const usedByOthers = await this.pluginRepository.isPluginUsedByOtherGuilds(pluginId, guildId);
     if (!usedByOthers) {
-      const pluginDir = this.pluginDiscoveryService.getInstalledPluginDirectory(pluginId);
-      await rm(pluginDir, { recursive: true, force: true }).catch(() => {});
+      const pluginDirs = [
+        this.pluginDiscoveryService.getInstalledPluginDirectory(pluginId),
+        this.pluginDiscoveryService.getPluginDirectory(pluginId),
+      ];
+      await Promise.all(
+        pluginDirs.map((pluginDir) => rm(pluginDir, { recursive: true, force: true }).catch(() => {})),
+      );
       this.manifestMap.delete(pluginId);
       await this.pluginRepository.deletePluginRecord(pluginId);
     }

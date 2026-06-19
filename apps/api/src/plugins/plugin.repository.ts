@@ -1,6 +1,11 @@
 import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 import {
   guildPlugins,
+  commandAliases,
+  commandLogs,
+  commandPermissions,
+  guildPluginCommands,
+  pluginCommands,
   pluginLogs,
   pluginStorage,
   pluginTemplates,
@@ -58,7 +63,7 @@ export class PluginRepository {
         guildUpdatedAt: guildPlugins.updatedAt,
       })
       .from(plugins)
-      .leftJoin(
+      .innerJoin(
         guildPlugins,
         and(eq(guildPlugins.pluginId, plugins.id), eq(guildPlugins.guildId, guildId)),
       )
@@ -141,6 +146,21 @@ export class PluginRepository {
 
   async deletePluginData(guildId: string, pluginId: string): Promise<void> {
     await this.database
+      .delete(commandAliases)
+      .where(and(eq(commandAliases.guildId, guildId), eq(commandAliases.pluginId, pluginId)));
+    await this.database
+      .delete(commandLogs)
+      .where(and(eq(commandLogs.guildId, guildId), eq(commandLogs.pluginId, pluginId)));
+    await this.database
+      .delete(commandPermissions)
+      .where(and(eq(commandPermissions.guildId, guildId), eq(commandPermissions.pluginId, pluginId)));
+    await this.database
+      .delete(guildPluginCommands)
+      .where(and(eq(guildPluginCommands.guildId, guildId), eq(guildPluginCommands.pluginId, pluginId)));
+    await this.database
+      .delete(pluginCommands)
+      .where(and(eq(pluginCommands.guildId, guildId), eq(pluginCommands.pluginId, pluginId)));
+    await this.database
       .delete(pluginLogs)
       .where(and(eq(pluginLogs.guildId, guildId), eq(pluginLogs.pluginId, pluginId)));
     await this.database
@@ -177,12 +197,12 @@ function toPluginInsert(manifest: PluginManifest) {
 
 function toGuildPlugin(row: {
   plugin: PluginRecord;
-  guildPluginId: string | null;
-  enabled: boolean | null;
-  guildInstalledAt: Date | null;
-  guildUpdatedAt: Date | null;
+  guildPluginId: string;
+  enabled: boolean;
+  guildInstalledAt: Date;
+  guildUpdatedAt: Date;
 }): GuildPlugin {
-  const enabled = row.enabled ?? false;
+  const enabled = row.enabled;
   return {
     id: row.plugin.id,
     name: row.plugin.name,
@@ -192,7 +212,7 @@ function toGuildPlugin(row: {
     status: row.plugin.status,
     enabled,
     guildStatus: enabled ? 'ENABLED' : 'DISABLED',
-    installedAt: row.guildInstalledAt?.toISOString() ?? null,
+    installedAt: row.guildInstalledAt.toISOString(),
     updatedAt: (row.guildUpdatedAt ?? row.plugin.updatedAt).toISOString(),
     dashboard: null,
   };

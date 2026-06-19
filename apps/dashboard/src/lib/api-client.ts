@@ -55,7 +55,11 @@ export class ApiError extends Error {
     public readonly status: number,
     public readonly problem: ProblemDetail,
   ) {
-    super(problem.detail);
+    super(problem.error?.message ?? problem.detail);
+  }
+
+  get code(): string | undefined {
+    return this.problem.error?.code;
   }
 }
 

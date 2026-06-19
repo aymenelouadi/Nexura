@@ -7,6 +7,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@nexura/ui';
+import type { GuildPluginListResponse } from '@nexura/types';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { UploadIcon, XIcon } from 'lucide-react';
 import { useCallback, useState } from 'react';
@@ -20,7 +21,7 @@ interface PluginUploadDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
-const ALLOWED_EXTENSIONS = new Set(['zip', 'nexura-plugin']);
+const ALLOWED_EXTENSIONS = new Set(['nexura', 'codenexus']);
 const MAX_SIZE_MB = 50;
 const MAX_SIZE_BYTES = MAX_SIZE_MB * 1024 * 1024;
 
@@ -32,8 +33,17 @@ export function PluginUploadDialog({ guildId, open, onOpenChange }: PluginUpload
 
   const upload = useMutation({
     mutationFn: (selectedFile: File) => api.uploadGuildPlugin(guildId, selectedFile),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['guilds', guildId, 'plugins'] });
+    onSuccess: async (plugin) => {
+      queryClient.setQueryData<GuildPluginListResponse>(['guilds', guildId, 'plugins'], (current) => {
+        if (!current) return { data: [plugin] };
+        const exists = current.data.some((item) => item.id === plugin.id);
+        return { data: exists ? current.data.map((item) => (item.id === plugin.id ? plugin : item)) : [...current.data, plugin] };
+      });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['guilds', guildId, 'plugins'] }),
+        queryClient.invalidateQueries({ queryKey: ['guilds', guildId] }),
+        queryClient.invalidateQueries({ queryKey: ['guilds'] }),
+      ]);
       toast.success('Plugin installed successfully.');
       setFile(null);
       setValidationError(null);
@@ -47,7 +57,7 @@ export function PluginUploadDialog({ guildId, open, onOpenChange }: PluginUpload
   const validateFile = useCallback((selectedFile: File): string | null => {
     const extension = selectedFile.name.split('.').pop()?.toLowerCase();
     if (!extension || !ALLOWED_EXTENSIONS.has(extension)) {
-      return 'Only .zip and .nexura-plugin files are allowed.';
+      return 'Only .nexura and .codenexus files are allowed.';
     }
     if (selectedFile.size > MAX_SIZE_BYTES) {
       return `File exceeds the ${MAX_SIZE_MB} MB limit.`;
@@ -132,7 +142,7 @@ export function PluginUploadDialog({ guildId, open, onOpenChange }: PluginUpload
             <p className="text-xs text-muted-foreground">
               {file
                 ? `${(file.size / 1024 / 1024).toFixed(2)} MB`
-                : '.zip or .nexura-plugin up to 50 MB'}
+                : '.nexura or .codenexus up to 50 MB'}
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -152,7 +162,7 @@ export function PluginUploadDialog({ guildId, open, onOpenChange }: PluginUpload
           <input
             id="plugin-upload-input"
             type="file"
-            accept=".zip,.nexura-plugin"
+            accept=".nexura,.codenexus"
             className="hidden"
             onChange={(event) => handleFile(event.target.files?.[0])}
           />

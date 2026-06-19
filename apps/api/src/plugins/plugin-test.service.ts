@@ -1,16 +1,10 @@
 import { Inject, Injectable, NotFoundException } from '@nestjs/common';
-import type { ApiEnvironment, PluginScope } from '@nexura/shared';
+import type { ApiEnvironment, DiscordApiMessage, PluginScope } from '@nexura/shared';
+import { toDiscordApiPayload } from '@nexura/shared';
 import type { CoreMessage, PluginTemplate, PluginTestResult } from '@nexura/types';
 
 import { API_ENVIRONMENT } from '../config/tokens.js';
 import { PluginCoreRepository } from './plugin-core.repository.js';
-
-interface DiscordApiMessage {
-  content?: string;
-  embeds?: unknown[];
-  components?: unknown[];
-  flags?: number;
-}
 
 @Injectable()
 export class PluginTestService {
@@ -91,58 +85,4 @@ function mapStrings(value: unknown, resolve: (text: string) => string): unknown 
     return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, mapStrings(item, resolve)]));
   }
   return value;
-}
-
-function toDiscordApiPayload(message: CoreMessage): DiscordApiMessage {
-  if (message.type === 'text') {
-    return { content: message.content };
-  }
-  if (message.type === 'embed') {
-    const embed: Record<string, unknown> = { fields: message.fields };
-    if (message.title !== undefined) embed.title = message.title;
-    if (message.description !== undefined) embed.description = message.description;
-    if (message.color !== undefined) embed.color = message.color;
-    if (message.author !== undefined) embed.author = message.author;
-    if (message.footer !== undefined) embed.footer = message.footer;
-    if (message.thumbnailUrl !== undefined) embed.thumbnail = { url: message.thumbnailUrl };
-    if (message.imageUrl !== undefined) embed.image = { url: message.imageUrl };
-    return { embeds: [embed] };
-  }
-  return {
-    flags: 1 << 15,
-    components: message.components.map(toDiscordContainer),
-  };
-}
-
-function toDiscordContainer(container: { spoiler: boolean; items: unknown[] }): Record<string, unknown> {
-  return {
-    type: 17,
-    spoiler: container.spoiler,
-    components: (container.items as Array<Record<string, unknown>>).flatMap((item): unknown[] => {
-      if (item.type === 'text_display') return [{ type: 10, content: item.content }];
-      if (item.type === 'separator') {
-        return [{ type: 14, divider: item.divider, spacing: item.spacing === 'large' ? 2 : 1 }];
-      }
-      if (item.type === 'media') {
-        return [
-          {
-            type: 12,
-            items: [{ media: { url: item.url }, ...(item.description === undefined ? {} : { description: item.description }), spoiler: item.spoiler }],
-          },
-        ];
-      }
-      if (item.type === 'section') {
-        return [{ type: 9, components: [{ type: 10, content: item.content }], accessory: toDiscordButton(item.accessory as Record<string, unknown>) }];
-      }
-      return [{ type: 1, components: [toDiscordButton(item)] }];
-    }),
-  };
-}
-
-function toDiscordButton(button: Record<string, unknown>): Record<string, unknown> {
-  if (button.style === 'link') {
-    return { type: 2, style: 5, label: button.label, disabled: button.disabled, url: button.url ?? 'https://discord.com' };
-  }
-  const style = ({ primary: 1, secondary: 2, success: 3, danger: 4 } as Record<string, number>)[String(button.style)] ?? 1;
-  return { type: 2, style, label: button.label, disabled: button.disabled, custom_id: button.id };
 }

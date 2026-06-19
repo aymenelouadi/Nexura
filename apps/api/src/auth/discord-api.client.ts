@@ -20,6 +20,7 @@ const discordGuildSchema = z.object({
   id: z.string(),
   name: z.string(),
   icon: z.string().nullable(),
+  approximate_member_count: z.number().int().nullable().optional(),
   owner: z.boolean(),
   permissions: z.string(),
 });
@@ -75,7 +76,7 @@ export class DiscordApiClient {
   }
 
   async getCurrentUserGuilds(accessToken: string): Promise<DiscordGuild[]> {
-    return this.getDiscordResource('/users/@me/guilds', accessToken, z.array(discordGuildSchema));
+    return this.getDiscordResource('/users/@me/guilds?with_counts=true', accessToken, z.array(discordGuildSchema));
   }
 
   private async requestToken(parameters: Record<string, string>): Promise<DiscordTokenResponse> {

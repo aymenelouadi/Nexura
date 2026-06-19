@@ -79,27 +79,40 @@ export const variablePreviewDataSchema = z
   })
   .strict();
 
+export const discordUrlSchema = z
+  .string()
+  .url()
+  .max(2_048)
+  .regex(/^https?:\/\//u, 'URL must start with http:// or https://');
+
 export const textMessageSchema = z
   .object({
     type: z.literal('text'),
-    content: z.string().max(2_000),
+    content: z.string().min(1).max(2_000),
   })
   .strict();
 
 const embedAuthorSchema = z
   .object({
     name: z.string().min(1).max(256),
-    iconUrl: z.url().optional(),
-    url: z.url().optional(),
+    iconUrl: discordUrlSchema.optional(),
+    url: discordUrlSchema.optional(),
   })
   .strict();
+
+const embedFooterIconSourceSchema = z.enum(['none', 'user_avatar', 'server_icon', 'custom']);
 
 const embedFooterSchema = z
   .object({
     text: z.string().min(1).max(2_048),
-    iconUrl: z.url().optional(),
+    iconSource: embedFooterIconSourceSchema.default('none'),
+    iconUrl: discordUrlSchema.optional(),
   })
-  .strict();
+  .strict()
+  .refine((footer) => footer.iconSource !== 'custom' || Boolean(footer.iconUrl), {
+    message: 'Custom footer icon requires a URL.',
+    path: ['iconUrl'],
+  });
 
 const embedFieldSchema = z
   .object({
@@ -117,8 +130,8 @@ export const embedMessageSchema = z
     color: z.number().int().min(0).max(0xffffff).optional(),
     author: embedAuthorSchema.optional(),
     footer: embedFooterSchema.optional(),
-    thumbnailUrl: z.url().optional(),
-    imageUrl: z.url().optional(),
+    thumbnailUrl: discordUrlSchema.optional(),
+    imageUrl: discordUrlSchema.optional(),
     fields: z.array(embedFieldSchema).max(25).default([]),
   })
   .strict()
@@ -132,10 +145,14 @@ const componentButtonSchema = z
     id: z.string().min(1).max(100),
     label: z.string().min(1).max(80),
     style: z.enum(['primary', 'secondary', 'success', 'danger', 'link']),
-    url: z.url().optional(),
+    url: discordUrlSchema.optional(),
     disabled: z.boolean().default(false),
   })
-  .strict();
+  .strict()
+  .refine((button) => button.style !== 'link' || Boolean(button.url), {
+    message: 'Link buttons must have a URL.',
+    path: ['url'],
+  });
 
 const componentTextDisplaySchema = z
   .object({
@@ -155,7 +172,7 @@ const componentSeparatorSchema = z
 const componentMediaSchema = z
   .object({
     type: z.literal('media'),
-    url: z.url(),
+    url: discordUrlSchema,
     description: z.string().max(1_024).optional(),
     spoiler: z.boolean().default(false),
   })
@@ -354,6 +371,10 @@ export type VariablePreviewData = z.infer<typeof variablePreviewDataSchema>;
 export type TextMessage = z.infer<typeof textMessageSchema>;
 export type EmbedMessage = z.infer<typeof embedMessageSchema>;
 export type ComponentsV2Message = z.infer<typeof componentsV2MessageSchema>;
+export type ComponentsV2Container = z.infer<typeof componentContainerSchema>;
+export type ComponentsV2Item = z.infer<typeof componentItemSchema>;
+export type ComponentsV2Button = z.infer<typeof componentButtonSchema>;
+export type EmbedFooterIconSource = z.infer<typeof embedFooterIconSourceSchema>;
 export type CoreMessage = z.infer<typeof coreMessageSchema>;
 export type TemplateContentMode = z.infer<typeof templateContentModeSchema>;
 export type VisualEditorElement = z.infer<typeof visualEditorElementSchema>;

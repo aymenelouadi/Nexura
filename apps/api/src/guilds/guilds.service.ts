@@ -134,6 +134,7 @@ export class GuildsService {
       id: guild.id,
       name: guild.name,
       icon: guild.icon,
+      memberCount: guild.approximate_member_count ?? null,
       canManage,
       isOwner: permission.isOwner,
       hasAdmin: permission.hasAdmin,

@@ -7,8 +7,8 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-  Checkbox,
   cn,
+  CoreSwitch,
   Dialog,
   DialogContent,
   DialogDescription,
@@ -30,7 +30,6 @@ import {
   SelectTrigger,
   SelectValue,
   Skeleton,
-  Switch,
 } from '@nexura/ui';
 import {
   discordSnowflakeSchema,
@@ -59,7 +58,8 @@ import { toast } from 'sonner';
 import { z } from 'zod';
 
 import { welcomeMessageTypeSchema, type DmWelcomeSettings, type LeaveSettings, type WelcomeSettings } from '@nexura/plugin-welcome/schemas/settings';
-import { DiscordMessagePreview, samplePreviewData } from '../../components/discord-message-preview.js';
+import { coreMessageSchema, type GuildDetail, type User } from '@nexura/types';
+import { DiscordMessagePreview } from '../../components/discord-message-preview.js';
 import { ErrorState } from '../../components/error-state.js';
 import { createDefaultMessage, MessageComposer, type MessageMode } from '../../components/message-composer.js';
 import {
@@ -76,6 +76,7 @@ import {
   guildChannelsQuery,
   guildPluginCommandsQuery,
   guildPluginTemplatesQuery,
+  guildQuery,
 } from '../../hooks/queries.js';
 import { formatShortDate, formatDateTime } from '../../lib/date.js';
 import { api } from '../../lib/api-client.js';
@@ -85,13 +86,17 @@ const levels: PluginLogLevel[] = ['DEBUG', 'INFO', 'WARN', 'ERROR', 'AUDIT'];
 
 export const welcomeVariables = [
   { key: '[user]', label: 'User mention', description: 'Mentions the joining or leaving member.', group: 'User' },
-  { key: '[userName]', label: 'Username', description: 'The member display name.', group: 'User' },
+  { key: '[userName]', label: 'Username', description: 'The Discord username (not display name).', group: 'User' },
+  { key: '[userDisplayName]', label: 'Display name', description: 'The Discord global/display name.', group: 'User' },
+  { key: '[userId]', label: 'User ID', description: 'The Discord user ID.', group: 'User' },
   { key: '[userCreatedDate]', label: 'Account created', description: 'Date the Discord account was created.', group: 'User' },
   { key: '[userCreatedDays]', label: 'Account age', description: 'Account age in days.', group: 'User' },
   { key: '[serverName]', label: 'Server name', description: 'Current Discord server name.', group: 'Server' },
+  { key: '[serverId]', label: 'Server ID', description: 'Current Discord server ID.', group: 'Server' },
   { key: '[memberCount]', label: 'Member count', description: 'Current server member count.', group: 'Server' },
   { key: '[inviter]', label: 'Inviter mention', description: 'Mentions the invite creator when known.', group: 'Invites' },
   { key: '[inviterName]', label: 'Inviter name', description: 'Name of the invite creator.', group: 'Invites' },
+  { key: '[inviterId]', label: 'Inviter ID', description: 'ID of the invite creator.', group: 'Invites' },
   { key: '[invitesCount]', label: 'Invite count', description: 'Total uses of the matched invite.', group: 'Invites' },
   { key: '[inviteCode]', label: 'Invite code', description: 'The matched invite code.', group: 'Invites' },
 ];
@@ -267,11 +272,20 @@ function MessageSettingsPanel({
   const settingsQuery = usePluginSettingsQuery<MessageSettings>(guildId, storageKey);
   const templates = useQuery({ ...guildPluginTemplatesQuery(guildId, pluginId), enabled: Boolean(guildId) });
   const channels = useQuery({ ...guildChannelsQuery(guildId), enabled: Boolean(guildId) });
+  const guild = useQuery({ ...guildQuery(guildId), enabled: Boolean(guildId) });
   const user = useQuery({ ...currentUserQuery, enabled: Boolean(guildId) });
   const botProfile = useQuery({ ...botProfileQuery, enabled: Boolean(guildId) });
 
   const [advanced, setAdvanced] = useState(false);
   const [message, setMessage] = useState<CoreMessage | null>(null);
+  const [messageDirty, setMessageDirty] = useState(false);
+
+  const previewContext = useMemo(
+    () => buildMessagePreviewContext(guild.data, user.data),
+    [guild.data, user.data],
+  );
+  const userAvatarUrl = useMemo(() => getDiscordUserAvatarUrl(user.data), [user.data]);
+  const guildIconUrl = useMemo(() => getDiscordGuildIconUrl(guild.data), [guild.data]);
 
   const form = useForm<MessageSettingsFormValues>({
     resolver: zodResolver(messageSettingsFormSchema),
@@ -281,6 +295,7 @@ function MessageSettingsPanel({
   useEffect(() => {
     if (settingsQuery.isSuccess) {
       form.reset(settingsToFormValues(settingsQuery.data ?? createDefaultSettings(usage, defaultTemplateName)));
+      setMessageDirty(false);
     }
   }, [settingsQuery.data, settingsQuery.isSuccess, form, usage, defaultTemplateName]);
 
@@ -292,16 +307,24 @@ function MessageSettingsPanel({
   useEffect(() => {
     if (selectedTemplate && selectedTemplate.contentMode === mode) {
       setMessage(selectedTemplate.content as CoreMessage);
+      setMessageDirty(false);
     } else if (!message || message.type !== mode) {
       setMessage(createDefaultMessage(mode));
+      setMessageDirty(false);
     }
   }, [selectedTemplate?.name, mode]);
+
+  const handleMessageChange = useCallback((nextMessage: CoreMessage) => {
+    setMessage(nextMessage);
+    setMessageDirty(true);
+  }, []);
 
   const save = useMutation({
     mutationFn: async (values: MessageSettingsFormValues) => {
       const templateName = values.templateId;
       if (!templateName) throw new Error('No template selected.');
       if (!message) throw new Error('No message content.');
+      validateMessage(message);
       const settings = formValuesToSettings(values, usage);
       await api.setGuildPluginStorage(guildId, pluginId, storageKey, settings);
       await api.saveGuildPluginTemplate(guildId, pluginId, {
@@ -310,7 +333,7 @@ function MessageSettingsPanel({
         contentMode: mode,
         content: message,
         variables: welcomeVariables.map((v) => v.key),
-        previewData: samplePreviewData,
+        previewData: previewContext.preview,
       });
       return settings;
     },
@@ -318,6 +341,7 @@ function MessageSettingsPanel({
       await queryClient.invalidateQueries({ queryKey: ['guilds', guildId, 'plugins', pluginId, 'storage', storageKey] });
       await queryClient.invalidateQueries({ queryKey: ['guilds', guildId, 'plugins', pluginId, 'templates'] });
       form.reset(settingsToFormValues(settings));
+      setMessageDirty(false);
       toast.success(`${title} saved.`);
     },
     onError: (error) => toast.error(error.message || `Failed to save ${title.toLowerCase()}.`),
@@ -327,6 +351,7 @@ function MessageSettingsPanel({
     mutationFn: async (values: MessageSettingsFormValues) => {
       if (!values.enabled) throw new Error('Enable this message before testing.');
       if (!message) throw new Error('No message content.');
+      validateMessage(message);
       const templateName = values.templateId;
       if (!templateName) throw new Error('No template selected.');
       await api.saveGuildPluginTemplate(guildId, pluginId, {
@@ -335,7 +360,7 @@ function MessageSettingsPanel({
         contentMode: mode,
         content: message,
         variables: welcomeVariables.map((v) => v.key),
-        previewData: samplePreviewData,
+        previewData: previewContext.preview,
       });
       const channelId = usage === 'dm' ? values.fallbackChannelId : values.channelId;
       const userId = usage === 'dm' ? user.data?.discordId : undefined;
@@ -343,7 +368,7 @@ function MessageSettingsPanel({
       return api.testGuildPluginTemplate(guildId, pluginId, templateName, {
         channelId: channelId ?? undefined,
         userId,
-        variables: samplePreviewData,
+        variables: previewContext.test,
       });
     },
     onSuccess: () => toast.success('Test message sent.'),
@@ -374,13 +399,15 @@ function MessageSettingsPanel({
                 control={form.control}
                 name="enabled"
                 render={({ field }) => (
-                  <FormItem className="flex flex-row items-center gap-2 space-y-0">
+                  <FormItem>
                     <FormControl>
-                      <Switch id={`${usage}-enabled`} checked={field.value} onCheckedChange={field.onChange} />
+                      <CoreSwitch
+                        id={`${usage}-enabled`}
+                        label={field.value ? 'Enabled' : 'Disabled'}
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                      />
                     </FormControl>
-                    <FormLabel htmlFor={`${usage}-enabled`} className="cursor-pointer">
-                      {field.value ? 'Enabled' : 'Disabled'}
-                    </FormLabel>
                   </FormItem>
                 )}
               />
@@ -412,17 +439,15 @@ function MessageSettingsPanel({
                     control={form.control}
                     name="fallbackIfDmClosed"
                     render={({ field }) => (
-                      <FormItem className="flex flex-row items-center gap-2 space-y-0">
+                      <FormItem>
                         <FormControl>
-                          <Checkbox
+                          <CoreSwitch
                             id={`${usage}-fallback`}
+                            label="Fallback to channel if DM is closed"
                             checked={field.value}
                             onCheckedChange={field.onChange}
                           />
                         </FormControl>
-                        <FormLabel htmlFor={`${usage}-fallback`} className="cursor-pointer">
-                          Fallback to channel if DM is closed
-                        </FormLabel>
                       </FormItem>
                     )}
                   />
@@ -465,8 +490,13 @@ function MessageSettingsPanel({
                 variables={welcomeVariables}
                 placeholder={`Write your ${usage} message...`}
                 showPreview={false}
+                botName={botProfile.data?.username}
+                botAvatarUrl={botProfile.data?.avatarUrl}
+                userAvatarUrl={userAvatarUrl}
+                guildIconUrl={guildIconUrl}
+                previewVariables={previewContext.preview}
                 onModeChange={(nextMode) => form.setValue('messageType', nextMode, { shouldDirty: true })}
-                onChange={setMessage}
+                onChange={handleMessageChange}
               />
             ) : null}
 
@@ -497,17 +527,15 @@ function MessageSettingsPanel({
                       control={form.control}
                       name="autoDeleteEnabled"
                       render={({ field }) => (
-                        <FormItem className="flex flex-row items-center gap-2 space-y-0">
+                        <FormItem>
                           <FormControl>
-                            <Switch
+                            <CoreSwitch
                               id={`${usage}-autodelete`}
+                              label="Auto-delete after send"
                               checked={field.value}
                               onCheckedChange={field.onChange}
                             />
                           </FormControl>
-                          <FormLabel htmlFor={`${usage}-autodelete`} className="cursor-pointer">
-                            Auto-delete after send
-                          </FormLabel>
                         </FormItem>
                       )}
                     />
@@ -534,17 +562,15 @@ function MessageSettingsPanel({
                     control={form.control}
                     name="mentionUser"
                     render={({ field }) => (
-                      <FormItem className="flex flex-row items-center gap-2 space-y-0">
+                      <FormItem>
                         <FormControl>
-                          <Checkbox
+                          <CoreSwitch
                             id={`${usage}-mention`}
+                            label="Mention user"
                             checked={field.value}
                             onCheckedChange={field.onChange}
                           />
                         </FormControl>
-                        <FormLabel htmlFor={`${usage}-mention`} className="cursor-pointer">
-                          Mention user
-                        </FormLabel>
                       </FormItem>
                     )}
                   />
@@ -554,17 +580,15 @@ function MessageSettingsPanel({
                     control={form.control}
                     name="deleteIfUserLeavesBeforeSend"
                     render={({ field }) => (
-                      <FormItem className="flex flex-row items-center gap-2 space-y-0">
+                      <FormItem>
                         <FormControl>
-                          <Checkbox
+                          <CoreSwitch
                             id={`${usage}-delete-leave`}
+                            label="Delete if user leaves before send"
                             checked={field.value}
                             onCheckedChange={field.onChange}
                           />
                         </FormControl>
-                        <FormLabel htmlFor={`${usage}-delete-leave`} className="cursor-pointer">
-                          Delete if user leaves before send
-                        </FormLabel>
                       </FormItem>
                     )}
                   />
@@ -576,8 +600,13 @@ function MessageSettingsPanel({
                   variables={welcomeVariables}
                   placeholder={`Write your ${usage} message...`}
                   showPreview={false}
+                  botName={botProfile.data?.username}
+                  botAvatarUrl={botProfile.data?.avatarUrl}
+                  userAvatarUrl={userAvatarUrl}
+                  guildIconUrl={guildIconUrl}
+                  previewVariables={previewContext.preview}
                   onModeChange={(nextMode) => form.setValue('messageType', nextMode, { shouldDirty: true })}
-                  onChange={setMessage}
+                  onChange={handleMessageChange}
                 />
               </div>
             ) : null}
@@ -587,6 +616,7 @@ function MessageSettingsPanel({
                 message={message ?? createDefaultMessage(mode)}
                 botName={botProfile.data?.username ?? 'Nexura'}
                 botAvatarUrl={botProfile.data?.avatarUrl}
+                previewVariables={previewContext.preview}
               />
             </div>
           </CardContent>
@@ -596,7 +626,7 @@ function MessageSettingsPanel({
           <Button variant="outline" size="sm" onClick={() => test.mutate(form.getValues())} disabled={test.isPending || save.isPending}>
             <SendIcon data-icon="inline-start" /> Send test {usage} message
           </Button>
-          <Button size="sm" type="submit" disabled={!form.formState.isDirty || save.isPending || test.isPending}>
+          <Button size="sm" type="submit" disabled={(!form.formState.isDirty && !messageDirty) || save.isPending || test.isPending}>
             <SaveIcon data-icon="inline-start" /> Save {title.toLowerCase()}
           </Button>
         </div>
@@ -605,10 +635,17 @@ function MessageSettingsPanel({
   );
 }
 
+
 function TemplatesTab({ guildId }: { guildId: string }) {
   const queryClient = useQueryClient();
   const templates = useQuery({ ...guildPluginTemplatesQuery(guildId, pluginId), enabled: Boolean(guildId) });
   const botProfile = useQuery({ ...botProfileQuery, enabled: Boolean(guildId) });
+  const guild = useQuery({ ...guildQuery(guildId), enabled: Boolean(guildId) });
+  const user = useQuery({ ...currentUserQuery, enabled: Boolean(guildId) });
+  const previewContext = useMemo(
+    () => buildMessagePreviewContext(guild.data, user.data),
+    [guild.data, user.data],
+  );
   const [search, setSearch] = useState('');
   const [editing, setEditing] = useState<PluginTemplate | 'new' | null>(null);
   const [name, setName] = useState('New Template');
@@ -618,15 +655,17 @@ function TemplatesTab({ guildId }: { guildId: string }) {
   const [deleteTarget, setDeleteTarget] = useState<PluginTemplate | null>(null);
 
   const save = useMutation({
-    mutationFn: () =>
-      api.saveGuildPluginTemplate(guildId, pluginId, {
+    mutationFn: () => {
+      validateMessage(content);
+      return api.saveGuildPluginTemplate(guildId, pluginId, {
         name,
         type,
         contentMode: mode,
         content,
         variables: welcomeVariables.map((v) => v.key),
-        previewData: samplePreviewData,
-      }),
+        previewData: previewContext.preview,
+      });
+    },
     onSuccess: async () => {
       setEditing(null);
       await queryClient.invalidateQueries({ queryKey: ['guilds', guildId, 'plugins', pluginId, 'templates'] });
@@ -748,6 +787,9 @@ function TemplatesTab({ guildId }: { guildId: string }) {
               value={content}
               variables={welcomeVariables}
               showPreview={false}
+              botName={botProfile.data?.username}
+              botAvatarUrl={botProfile.data?.avatarUrl}
+              previewVariables={previewContext.preview}
               onModeChange={(nextMode) => { setMode(nextMode); setContent(createDefaultMessage(nextMode)); }}
               onChange={setContent}
             />
@@ -771,7 +813,7 @@ function TemplatesTab({ guildId }: { guildId: string }) {
 
   const preview = (
     <PluginPreviewPanel title="Preview">
-      <DiscordMessagePreview message={content} botName={botProfile.data?.username ?? 'Nexura'} botAvatarUrl={botProfile.data?.avatarUrl} />
+      <DiscordMessagePreview message={content} botName={botProfile.data?.username ?? 'Nexura'} botAvatarUrl={botProfile.data?.avatarUrl} previewVariables={previewContext.preview} />
     </PluginPreviewPanel>
   );
 
@@ -882,11 +924,10 @@ function CommandCard({ command, onSave }: { command: PluginCommand; onSave: (pat
               control={form.control}
               name="enabled"
               render={({ field }) => (
-                <FormItem className="flex flex-row items-center gap-2 space-y-0">
+                <FormItem>
                   <FormControl>
-                    <Switch id={`cmd-${command.commandId}`} checked={field.value} onCheckedChange={field.onChange} />
+                    <CoreSwitch id={`cmd-${command.commandId}`} label="Enabled" checked={field.value} onCheckedChange={field.onChange} />
                   </FormControl>
-                  <FormLabel htmlFor={`cmd-${command.commandId}`} className="cursor-pointer">Enabled</FormLabel>
                 </FormItem>
               )}
             />
@@ -1287,6 +1328,80 @@ function formValuesToSettings(values: MessageSettingsFormValues, usage: 'welcome
     fallbackIfDmClosed: values.fallbackIfDmClosed,
     fallbackChannelId: values.fallbackChannelId,
   };
+}
+
+function discordSnowflakeToDate(snowflake: string): Date | null {
+  try {
+    const id = BigInt(snowflake);
+    const timestamp = Number(id >> 22n) + 1420070400000;
+    const date = new Date(timestamp);
+    return Number.isNaN(date.getTime()) ? null : date;
+  } catch {
+    return null;
+  }
+}
+
+function getDiscordUserAvatarUrl(user: User | undefined): string | null {
+  if (!user?.avatar) return null;
+  const extension = user.avatar.startsWith('a_') ? 'gif' : 'png';
+  return `https://cdn.discordapp.com/avatars/${user.discordId}/${user.avatar}.${extension}?size=128`;
+}
+
+function getDiscordGuildIconUrl(guild: GuildDetail | undefined): string | null {
+  if (!guild?.icon) return null;
+  const extension = guild.icon.startsWith('a_') ? 'gif' : 'png';
+  return `https://cdn.discordapp.com/icons/${guild.id}/${guild.icon}.${extension}?size=128`;
+}
+
+function buildMessagePreviewContext(guild: GuildDetail | undefined, user: User | undefined) {
+  const serverName = guild?.name ?? 'Server';
+  const serverId = guild?.id ?? '';
+  const memberCount = guild?.memberCount ? String(guild.memberCount) : '?';
+  const userName = user?.username ?? 'Unknown';
+  const userDisplayName = user?.globalName ?? user?.username ?? 'Unknown';
+  const userId = user?.discordId ?? '';
+  const createdAt = user?.discordId ? discordSnowflakeToDate(user.discordId) : null;
+  const isValidDate = createdAt !== null && !Number.isNaN(createdAt.getTime());
+  const safeDate = isValidDate ? createdAt : new Date();
+  const ageDays = Math.max(0, Math.floor((Date.now() - safeDate.getTime()) / 86_400_000));
+  const base = {
+    userName,
+    userDisplayName,
+    userId,
+    userCreatedDate: isValidDate ? createdAt.toLocaleDateString('en-US') : 'Unknown',
+    userCreatedDays: String(ageDays),
+    serverName,
+    serverId,
+    memberCount,
+    inviter: 'Unavailable',
+    inviterId: 'Unavailable',
+    inviterName: 'Unavailable',
+    invitesCount: '0',
+    inviteCode: 'Unavailable',
+  };
+  return {
+    preview: { ...base, user: `@${userDisplayName}` },
+    test: { ...base, user: user ? `<@${user.discordId}>` : '@Unknown' },
+  };
+}
+
+function validateMessage(message: CoreMessage): void {
+  const parsed = coreMessageSchema.safeParse(message);
+  if (!parsed.success) {
+    const issue = parsed.error.issues[0];
+    throw new Error(issue?.message ?? 'Message content is invalid.');
+  }
+  if (message.type === 'embed') {
+    const totalLength =
+      (message.title?.length ?? 0) +
+      (message.description?.length ?? 0) +
+      (message.footer?.text.length ?? 0) +
+      (message.author?.name.length ?? 0) +
+      message.fields.reduce((sum, field) => sum + field.name.length + field.value.length, 0);
+    if (totalLength > 6_000) {
+      throw new Error('Embed total content length exceeds Discord limit of 6000 characters.');
+    }
+  }
 }
 
 function ChannelSelect({ label, description, value, channels, onChange }: { label: ReactNode; description?: string; value: string | null; channels: Array<{ id: string; name: string }>; onChange: (value: string | null) => void }) {

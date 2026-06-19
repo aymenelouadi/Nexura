@@ -17,6 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@nexura/ui';
+import { useQueryClient } from '@tanstack/react-query';
 import type {
   AppSettingsAdvanced,
   AppSettingsAppearance,
@@ -43,7 +44,7 @@ import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 
 import { api } from '../../lib/api-client.js';
-import { CoreSwitch } from '../core-switch.js';
+import { CoreSwitch } from '@nexura/ui';
 
 export type SectionProps<T> = {
   value: T;
@@ -89,10 +90,47 @@ export function GeneralSection({ value, onSave, isSaving }: SectionProps<AppSett
           />
           <FormField
             control={form.control}
+            name="appDescription"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>App description</FormLabel>
+                <FormControl>
+                  <Input
+                    {...field}
+                    value={field.value ?? ''}
+                    onChange={(event) => field.onChange(event.target.value || null)}
+                    maxLength={300}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
             name="supportUrl"
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Support URL</FormLabel>
+                <FormControl>
+                  <Input
+                    {...field}
+                    value={field.value ?? ''}
+                    onChange={(event) => field.onChange(event.target.value || null)}
+                    type="url"
+                    placeholder="https://"
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="websiteUrl"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Website URL</FormLabel>
                 <FormControl>
                   <Input
                     {...field}
@@ -323,6 +361,42 @@ export function PwaSection({ value, onSave, isSaving }: SectionProps<AppSettings
                     id="pwa-enabled"
                     label="Enable PWA"
                     description="Expose a web app manifest."
+                    checked={field.value}
+                    onCheckedChange={field.onChange}
+                    disabled={isSaving}
+                  />
+                </FormControl>
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="installPromptEnabled"
+            render={({ field }) => (
+              <FormItem>
+                <FormControl>
+                  <CoreSwitch
+                    id="pwa-install-prompt"
+                    label="Enable install prompt"
+                    description="Allow the dashboard to offer app installation when supported."
+                    checked={field.value}
+                    onCheckedChange={field.onChange}
+                    disabled={isSaving}
+                  />
+                </FormControl>
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="offlineSupportEnabled"
+            render={({ field }) => (
+              <FormItem>
+                <FormControl>
+                  <CoreSwitch
+                    id="pwa-offline-support"
+                    label="Offline support"
+                    description="Persist the offline-support preference for the PWA runtime."
                     checked={field.value}
                     onCheckedChange={field.onChange}
                     disabled={isSaving}
@@ -663,6 +737,7 @@ function ImageUrlOrUpload({
 }) {
   const [uploading, setUploading] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const queryClient = useQueryClient();
 
   async function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -671,6 +746,7 @@ function ImageUrlOrUpload({
     try {
       const kind = id === 'favicon-url' ? 'favicon' : 'logo';
       const next = await api.uploadBrandingAsset(kind, file);
+      queryClient.setQueryData(['app-settings'], next);
       const url = kind === 'favicon' ? next.branding.faviconUrl : next.branding.logoUrl;
       if (url) {
         onUpload(url);
@@ -686,7 +762,7 @@ function ImageUrlOrUpload({
   return (
     <div className="grid gap-2">
       {label ? <Label htmlFor={id}>{label}</Label> : null}
-      <div className="flex items-center gap-2">
+      <div className="flex min-w-0 items-center gap-2">
         <Input
           id={id}
           type="url"
@@ -728,9 +804,9 @@ function ImageUrlOrUpload({
         ) : null}
       </div>
       {value ? (
-        <div className="mt-1 flex items-center gap-3 rounded-md border border-border bg-muted/30 p-2">
+        <div className="mt-1 flex min-w-0 items-center gap-3 rounded-md border border-border bg-muted/30 p-2">
           <img src={value} alt="" className="size-8 rounded object-contain" />
-          <span className="truncate text-xs text-muted-foreground">{value}</span>
+          <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground" title={value}>{value}</span>
         </div>
       ) : null}
     </div>

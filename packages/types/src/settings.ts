@@ -3,14 +3,18 @@ import { z } from 'zod';
 export const appSettingsGeneralShape = z
   .object({
     appName: z.string().min(1).max(100),
+    appDescription: z.string().max(300).nullable(),
     supportUrl: z.string().url().nullable(),
+    websiteUrl: z.string().url().nullable(),
     defaultLanguage: z.string().min(2).max(10),
   })
   .strict();
 
 export const appSettingsGeneralDefaults = {
   appName: 'Nexura',
+  appDescription: 'A modular Discord management platform.',
   supportUrl: null,
+  websiteUrl: null,
   defaultLanguage: 'en',
 };
 
@@ -49,6 +53,8 @@ export const appSettingsAppearanceSchema = appSettingsAppearanceShape.default(ap
 export const appSettingsPwaShape = z
   .object({
     enabled: z.boolean(),
+    installPromptEnabled: z.boolean(),
+    offlineSupportEnabled: z.boolean(),
     shortName: z.string().min(1).max(64).nullable(),
     themeColor: z.string().min(4).max(7),
     backgroundColor: z.string().min(4).max(7),
@@ -57,6 +63,8 @@ export const appSettingsPwaShape = z
 
 export const appSettingsPwaDefaults = {
   enabled: false,
+  installPromptEnabled: false,
+  offlineSupportEnabled: false,
   shortName: null,
   themeColor: '#111827',
   backgroundColor: '#ffffff',
@@ -95,11 +103,13 @@ export const appSettingsSecuritySchema = appSettingsSecurityShape.default(appSet
 export const appSettingsIntegrationsShape = z
   .object({
     discordWebhookUrl: z.string().url().nullable(),
+    providers: z.record(z.string(), z.unknown()),
   })
   .strict();
 
 export const appSettingsIntegrationsDefaults = {
   discordWebhookUrl: null,
+  providers: {},
 };
 
 export const appSettingsIntegrationsSchema = appSettingsIntegrationsShape.default(appSettingsIntegrationsDefaults);
@@ -131,8 +141,6 @@ export const appSettingsSchema = z
   })
   .strict();
 
-export const updateAppSettingsSchema = appSettingsSchema.partial().strict();
-
 export const appSettingsSectionIdSchema = z.enum([
   'general',
   'branding',
@@ -154,6 +162,19 @@ export const sectionUpdateSchemaMap = {
   integrations: appSettingsIntegrationsShape.partial().strict(),
   advanced: appSettingsAdvancedShape.partial().strict(),
 } as const;
+
+export const updateAppSettingsSchema = z
+  .object({
+    general: sectionUpdateSchemaMap.general.optional(),
+    branding: sectionUpdateSchemaMap.branding.optional(),
+    appearance: sectionUpdateSchemaMap.appearance.optional(),
+    pwa: sectionUpdateSchemaMap.pwa.optional(),
+    debug: sectionUpdateSchemaMap.debug.optional(),
+    security: sectionUpdateSchemaMap.security.optional(),
+    integrations: sectionUpdateSchemaMap.integrations.optional(),
+    advanced: sectionUpdateSchemaMap.advanced.optional(),
+  })
+  .strict();
 
 export type AppSettingsSectionId = z.infer<typeof appSettingsSectionIdSchema>;
 export type AppSettingsGeneral = z.infer<typeof appSettingsGeneralSchema>;

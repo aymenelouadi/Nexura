@@ -75,6 +75,7 @@ describe('GuildPluginsPage', () => {
       id: mockGuildId,
       name: 'Test Guild',
       icon: null,
+      memberCount: 100,
       canManage: true,
       isOwner: true,
       hasAdmin: false,
@@ -121,7 +122,7 @@ describe('GuildPluginsPage', () => {
     const disableMock = vi.spyOn(api, 'disableGuildPlugin').mockResolvedValue(welcomePlugin);
     renderPage(<GuildPluginsPage />);
     const welcomeRow = await screen.findByTestId('plugin-row-welcome');
-    const toggle = within(welcomeRow).getByRole('button', { name: /disable welcome/i });
+    const toggle = within(welcomeRow).getByRole('switch', { name: /disable welcome/i });
     await user.click(toggle);
     await waitFor(() => expect(disableMock).toHaveBeenCalledWith(mockGuildId, 'welcome'));
   });
@@ -151,6 +152,9 @@ describe('GuildPluginsPage', () => {
   it('opens delete dialog and calls delete API on confirm', async () => {
     const user = userEvent.setup();
     const deleteMock = vi.spyOn(api, 'deleteGuildPlugin').mockResolvedValue(undefined);
+    vi.spyOn(api, 'getGuildPlugins')
+      .mockResolvedValueOnce({ data: mockPlugins })
+      .mockResolvedValue({ data: [ticketsPlugin] });
     renderPage(<GuildPluginsPage />);
     const welcomeRow = await screen.findByTestId('plugin-row-welcome');
     const menuButton = within(welcomeRow).getByRole('button', { name: /actions for welcome/i });
@@ -162,6 +166,7 @@ describe('GuildPluginsPage', () => {
     const confirmButton = within(dialog).getByRole('button', { name: /delete plugin/i });
     await user.click(confirmButton);
     await waitFor(() => expect(deleteMock).toHaveBeenCalledWith(mockGuildId, 'welcome', false));
+    await waitFor(() => expect(screen.queryByTestId('plugin-row-welcome')).not.toBeInTheDocument());
   });
 
   it('refresh button is present and clickable', async () => {

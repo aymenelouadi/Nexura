@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException } from '@nestjs/common';
+import { BadRequestException } from '@nestjs/common';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -48,7 +48,7 @@ function createMockDeps(overrides?: {
       reloadManifests: vi.fn().mockResolvedValue(undefined),
     } as unknown as PluginManager,
     pluginRepository: {
-      getPlugin: vi.fn().mockResolvedValue(overrides?.existingPlugin ? {} : null),
+      getPlugin: vi.fn().mockResolvedValue(overrides?.existingPlugin ? { version: '1.0.0' } : null),
       registerManifest: vi.fn().mockResolvedValue(undefined),
       setEnabled: vi.fn().mockResolvedValue(undefined),
     } as unknown as PluginRepository,
@@ -68,7 +68,7 @@ async function createZipBuffer(files: Record<string, string>): Promise<Buffer> {
 
 async function createTempFile(content: Buffer): Promise<{ filePath: string; dir: string }> {
   const tempDir = await mkdtemp(join(tmpdir(), 'nexura-upload-'));
-  const filePath = join(tempDir, 'plugin.zip');
+  const filePath = join(tempDir, 'plugin.nexura');
   await writeFile(filePath, content);
   return { filePath, dir: tempDir };
 }
@@ -105,12 +105,12 @@ describe('PluginUploadService', () => {
     const result = await service.upload(
       {
         fieldname: 'file',
-        originalname: 'test-plugin.zip',
+        originalname: 'test-plugin.nexura',
         encoding: '7bit',
-        mimetype: 'application/zip',
+        mimetype: 'application/octet-stream',
         size: zip.length,
         destination: '',
-        filename: 'plugin.zip',
+        filename: 'plugin.nexura',
         path: filePath,
         buffer: zip,
       },
@@ -122,7 +122,7 @@ describe('PluginUploadService', () => {
     expect(deps.pluginManager.reloadManifests).toHaveBeenCalled();
   });
 
-  it('rejects a non-zip archive', async () => {
+  it('rejects unsupported archive extensions', async () => {
     const { filePath, dir } = await createTempFile(Buffer.from('not a zip'));
     tempPaths.push(dir);
 
@@ -138,12 +138,12 @@ describe('PluginUploadService', () => {
       service.upload(
         {
           fieldname: 'file',
-          originalname: 'plugin.txt',
+          originalname: 'plugin.zip',
           encoding: '7bit',
           mimetype: 'text/plain',
           size: 10,
           destination: '',
-          filename: 'plugin.txt',
+          filename: 'plugin.zip',
           path: filePath,
           buffer: Buffer.from('not a zip'),
         },
@@ -169,12 +169,12 @@ describe('PluginUploadService', () => {
       service.upload(
         {
           fieldname: 'file',
-          originalname: 'plugin.zip',
+          originalname: 'plugin.nexura',
           encoding: '7bit',
-          mimetype: 'application/zip',
+          mimetype: 'application/octet-stream',
           size: zip.length,
           destination: '',
-          filename: 'plugin.zip',
+          filename: 'plugin.nexura',
           path: filePath,
           buffer: zip,
         },
@@ -204,12 +204,12 @@ describe('PluginUploadService', () => {
       service.upload(
         {
           fieldname: 'file',
-          originalname: 'plugin.zip',
+          originalname: 'plugin.nexura',
           encoding: '7bit',
-          mimetype: 'application/zip',
+          mimetype: 'application/octet-stream',
           size: zip.length,
           destination: '',
-          filename: 'plugin.zip',
+          filename: 'plugin.nexura',
           path: filePath,
           buffer: zip,
         },
@@ -239,12 +239,12 @@ describe('PluginUploadService', () => {
       service.upload(
         {
           fieldname: 'file',
-          originalname: 'plugin.zip',
+          originalname: 'plugin.nexura',
           encoding: '7bit',
-          mimetype: 'application/zip',
+          mimetype: 'application/octet-stream',
           size: zip.length,
           destination: '',
-          filename: 'plugin.zip',
+          filename: 'plugin.nexura',
           path: filePath,
           buffer: zip,
         },
@@ -276,18 +276,95 @@ describe('PluginUploadService', () => {
       service.upload(
         {
           fieldname: 'file',
-          originalname: 'plugin.zip',
+          originalname: 'plugin.nexura',
           encoding: '7bit',
-          mimetype: 'application/zip',
+          mimetype: 'application/octet-stream',
           size: zip.length,
           destination: '',
-          filename: 'plugin.zip',
+          filename: 'plugin.nexura',
           path: filePath,
           buffer: zip,
         },
         '1111111111111111111',
       ),
-    ).rejects.toThrow(ConflictException);
+    ).rejects.toThrow(PluginOperationException);
+  });
+
+  it('installs a registered plugin when the install folder is missing', async () => {
+    const zip = await createZipBuffer({
+      'plugin.json': JSON.stringify(validManifest),
+      'index.js': 'module.exports = {};',
+    });
+    const { filePath, dir } = await createTempFile(zip);
+    tempPaths.push(dir);
+
+    const deps = createMockDeps({ existingPlugin: true });
+    const service = new PluginUploadService(
+      deps.pluginDiscoveryService,
+      deps.pluginManager,
+      deps.pluginRepository,
+      deps.pluginMigrationService,
+    );
+
+    const result = await service.upload(
+      {
+        fieldname: 'file',
+        originalname: 'plugin.nexura',
+        encoding: '7bit',
+        mimetype: 'application/octet-stream',
+        size: zip.length,
+        destination: '',
+        filename: 'plugin.nexura',
+        path: filePath,
+        buffer: zip,
+      },
+      '1111111111111111111',
+    );
+
+    expect(result.id).toBe('test-plugin');
+    expect(deps.pluginRepository.setEnabled).toHaveBeenCalledWith('1111111111111111111', 'test-plugin', false);
+  });
+
+  it('returns a structured conflict when a different plugin version is registered', async () => {
+    const zip = await createZipBuffer({
+      'plugin.json': JSON.stringify({ ...validManifest, version: '2.0.0' }),
+      'index.js': 'module.exports = {};',
+    });
+    const { filePath, dir } = await createTempFile(zip);
+    tempPaths.push(dir);
+
+    const deps = createMockDeps({ existingPlugin: true });
+    const service = new PluginUploadService(
+      deps.pluginDiscoveryService,
+      deps.pluginManager,
+      deps.pluginRepository,
+      deps.pluginMigrationService,
+    );
+
+    await expect(
+      service.upload(
+        {
+          fieldname: 'file',
+          originalname: 'plugin.nexura',
+          encoding: '7bit',
+          mimetype: 'application/octet-stream',
+          size: zip.length,
+          destination: '',
+          filename: 'plugin.nexura',
+          path: filePath,
+          buffer: zip,
+        },
+        '1111111111111111111',
+      ),
+    ).rejects.toMatchObject({
+      response: {
+        error: {
+          code: 'PLUGIN_VERSION_CONFLICT',
+          message: 'Plugin "test-plugin" is already registered with version 1.0.0.',
+          details: { pluginId: 'test-plugin', existingVersion: '1.0.0', uploadedVersion: '2.0.0' },
+        },
+      },
+    });
   });
 
   it('throws PluginOperationException when file.path is undefined', async () => {
@@ -303,12 +380,12 @@ describe('PluginUploadService', () => {
       service.upload(
         {
           fieldname: 'file',
-          originalname: 'plugin.zip',
+          originalname: 'plugin.nexura',
           encoding: '7bit',
-          mimetype: 'application/zip',
+          mimetype: 'application/octet-stream',
           size: 100,
           destination: '',
-          filename: 'plugin.zip',
+          filename: 'plugin.nexura',
           path: undefined as unknown as string,
           buffer: Buffer.from(''),
         },

@@ -43,7 +43,7 @@ export function UserMenu({ user }: { user: User }) {
           <ChevronDownIcon className="hidden sm:block" aria-hidden="true" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-64">
+      <DropdownMenuContent align="end" className="w-64 max-w-[calc(100vw-2rem)] shadow-lg">
         <DropdownMenuLabel className="flex items-center gap-3 px-2 py-2">
           <UserAvatar user={user} className="size-9" />
           <span className="min-w-0 flex-1">

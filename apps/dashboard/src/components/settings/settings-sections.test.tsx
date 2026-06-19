@@ -12,7 +12,9 @@ describe('GeneralSection', () => {
     const onSave = vi.fn();
     const value = {
       appName: 'Nexura',
+      appDescription: 'A modular Discord management platform.',
       supportUrl: null,
+      websiteUrl: null,
       defaultLanguage: 'en',
     };
     render(

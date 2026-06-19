@@ -84,7 +84,7 @@ describe('dashboard architecture boundaries', () => {
 
   it('Welcome settings use shadcn Switch instead of handmade toggles', () => {
     const source = readSource('plugins/welcome/welcome-dashboard.tsx');
-    expect(source).toContain('<Switch');
+    expect(source).toContain('<CoreSwitch');
     expect(source).not.toContain('type="checkbox"');
   });
 
@@ -311,13 +311,13 @@ describe('DashboardStats', () => {
     const html = renderToString(
       <DashboardStats
         guilds={mockGuilds([
-          { id: '1111111111111111111', name: 'A', icon: null, canManage: true, isOwner: true, hasAdmin: false, hasManager: false, botConnected: true, action: 'manage', permissionRole: 'OWNER' },
-          { id: '1111111111111111112', name: 'B', icon: null, canManage: false, isOwner: false, hasAdmin: false, hasManager: false, botConnected: true, action: 'add_bot', permissionRole: null },
-          { id: '1111111111111111113', name: 'C', icon: null, canManage: true, isOwner: false, hasAdmin: true, hasManager: false, botConnected: false, action: 'manage', permissionRole: 'ADMINISTRATOR' },
-          { id: '1111111111111111114', name: 'D', icon: null, canManage: true, isOwner: false, hasAdmin: true, hasManager: false, botConnected: true, action: 'manage', permissionRole: 'ADMINISTRATOR' },
-          { id: '1111111111111111115', name: 'E', icon: null, canManage: false, isOwner: false, hasAdmin: false, hasManager: false, botConnected: false, action: 'add_bot', permissionRole: null },
-          { id: '1111111111111111116', name: 'F', icon: null, canManage: true, isOwner: false, hasAdmin: false, hasManager: true, botConnected: true, action: 'manage', permissionRole: 'MANAGER' },
-          { id: '1111111111111111117', name: 'G', icon: null, canManage: true, isOwner: false, hasAdmin: true, hasManager: false, botConnected: false, action: 'manage', permissionRole: 'ADMINISTRATOR' },
+          { id: '1111111111111111111', name: 'A', icon: null, memberCount: 100, canManage: true, isOwner: true, hasAdmin: false, hasManager: false, botConnected: true, action: 'manage', permissionRole: 'OWNER' },
+          { id: '1111111111111111112', name: 'B', icon: null, memberCount: 50, canManage: false, isOwner: false, hasAdmin: false, hasManager: false, botConnected: true, action: 'add_bot', permissionRole: null },
+          { id: '1111111111111111113', name: 'C', icon: null, memberCount: 200, canManage: true, isOwner: false, hasAdmin: true, hasManager: false, botConnected: false, action: 'manage', permissionRole: 'ADMINISTRATOR' },
+          { id: '1111111111111111114', name: 'D', icon: null, memberCount: 150, canManage: true, isOwner: false, hasAdmin: true, hasManager: false, botConnected: true, action: 'manage', permissionRole: 'ADMINISTRATOR' },
+          { id: '1111111111111111115', name: 'E', icon: null, memberCount: 80, canManage: false, isOwner: false, hasAdmin: false, hasManager: false, botConnected: false, action: 'add_bot', permissionRole: null },
+          { id: '1111111111111111116', name: 'F', icon: null, memberCount: 120, canManage: true, isOwner: false, hasAdmin: false, hasManager: true, botConnected: true, action: 'manage', permissionRole: 'MANAGER' },
+          { id: '1111111111111111117', name: 'G', icon: null, memberCount: 90, canManage: true, isOwner: false, hasAdmin: true, hasManager: false, botConnected: false, action: 'manage', permissionRole: 'ADMINISTRATOR' },
         ])}
       />,
     );

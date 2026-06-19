@@ -1,4 +1,5 @@
 export * from './command-registry.js';
+export * from './discord-payload.js';
 export * from './event-registry.js';
 export * from './logger.js';
 export * from './message-builder.js';

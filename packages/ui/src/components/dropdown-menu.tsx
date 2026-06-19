@@ -9,7 +9,8 @@ export const DropdownMenuGroup = DropdownMenuPrimitive.Group;
 
 export function DropdownMenuContent({
   className,
-  sideOffset = 4,
+  sideOffset = 8,
+  collisionPadding = 16,
   ...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.Content>) {
   return (
@@ -17,8 +18,9 @@ export function DropdownMenuContent({
       <DropdownMenuPrimitive.Content
         data-slot="dropdown-menu-content"
         sideOffset={sideOffset}
+        collisionPadding={collisionPadding}
         className={cn(
-          'min-w-40 overflow-hidden rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-md',
+          'z-50 min-w-40 overflow-hidden rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-md outline-none',
           className,
         )}
         {...props}
@@ -41,8 +43,8 @@ export function DropdownMenuItem({
       data-slot="dropdown-menu-item"
       data-inset={inset}
       data-variant={variant}
-      className={cn(
-        'relative flex cursor-default items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none select-none focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50 data-[inset]:pl-8 data-[variant=destructive]:text-destructive',
+        className={cn(
+        'relative flex cursor-default items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none select-none focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50 data-[inset]:pl-8 data-[variant=destructive]:text-destructive data-[variant=destructive]:focus:text-destructive',
         className,
       )}
       {...props}

@@ -30,12 +30,12 @@ export class SettingsService {
 
   async get(): Promise<AppSettings> {
     const stored = await this.repository.get();
-    return appSettingsSchema.parse(stored ?? defaultSettings);
+    return appSettingsSchema.parse(mergeSettingsDefaults(stored));
   }
 
   async update(userId: string, patch: UpdateAppSettings): Promise<AppSettings> {
     const current = await this.get();
-    const next = appSettingsSchema.parse({ ...current, ...patch });
+    const next = appSettingsSchema.parse(mergeSettingsPatch(current, patch));
     const saved = await this.repository.upsert(next);
 
     for (const [section, values] of Object.entries(patch)) {
@@ -161,7 +161,9 @@ export class SettingsService {
   private formatFieldLabel(field: string): string {
     const labels: Record<string, string> = {
       appName: 'App name',
+      appDescription: 'App description',
       supportUrl: 'Support URL',
+      websiteUrl: 'Website URL',
       defaultLanguage: 'Default language',
       logoUrl: 'Logo',
       faviconUrl: 'Favicon',
@@ -169,6 +171,8 @@ export class SettingsService {
       theme: 'Theme',
       sidebarVariant: 'Sidebar variant',
       enabled: 'PWA',
+      installPromptEnabled: 'PWA install prompt',
+      offlineSupportEnabled: 'Offline support',
       shortName: 'PWA short name',
       themeColor: 'Theme color',
       backgroundColor: 'Background color',
@@ -182,4 +186,32 @@ export class SettingsService {
     };
     return labels[field] ?? field.replace(/([A-Z])/g, ' $1').replace(/^./, (c) => c.toUpperCase());
   }
+}
+
+function mergeSettingsPatch(current: AppSettings, patch: UpdateAppSettings): AppSettings {
+  return appSettingsSchema.parse({
+    general: { ...current.general, ...patch.general },
+    branding: { ...current.branding, ...patch.branding },
+    appearance: { ...current.appearance, ...patch.appearance },
+    pwa: { ...current.pwa, ...patch.pwa },
+    debug: { ...current.debug, ...patch.debug },
+    security: { ...current.security, ...patch.security },
+    integrations: { ...current.integrations, ...patch.integrations },
+    advanced: { ...current.advanced, ...patch.advanced },
+  });
+}
+
+function mergeSettingsDefaults(stored: AppSettings | null): AppSettings {
+  if (!stored) return defaultSettings;
+
+  return appSettingsSchema.parse({
+    general: { ...defaultSettings.general, ...stored.general },
+    branding: { ...defaultSettings.branding, ...stored.branding },
+    appearance: { ...defaultSettings.appearance, ...stored.appearance },
+    pwa: { ...defaultSettings.pwa, ...stored.pwa },
+    debug: { ...defaultSettings.debug, ...stored.debug },
+    security: { ...defaultSettings.security, ...stored.security },
+    integrations: { ...defaultSettings.integrations, ...stored.integrations },
+    advanced: { ...defaultSettings.advanced, ...stored.advanced },
+  });
 }

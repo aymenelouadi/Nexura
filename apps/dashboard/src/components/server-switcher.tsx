@@ -74,7 +74,7 @@ export function ServerSwitcher() {
           <ChevronDownIcon className="hidden sm:block" aria-hidden="true" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-72 max-w-[calc(100vw-2rem)]">
+      <DropdownMenuContent align="start" className="w-72 max-w-[calc(100vw-2rem)] shadow-lg">
         <DropdownMenuLabel>Manageable servers</DropdownMenuLabel>
         <div className="px-2 pb-2">
           <input
@@ -89,7 +89,7 @@ export function ServerSwitcher() {
           {filteredGuilds.slice(0, 20).map((guild) => (
             <DropdownMenuItem
               key={guild.id}
-              className="py-2"
+            className="py-2"
               onSelect={() => selectServer(guild.id)}
             >
               <GuildAvatar guild={guild} className="size-7" />

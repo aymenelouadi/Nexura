@@ -24,7 +24,7 @@ export interface ProcessedUpload {
   height: number;
 }
 
-const ALLOWED_MIME_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp']);
+const ALLOWED_MIME_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/x-icon']);
 const SVG_MIME_TYPE = 'image/svg+xml';
 const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024;
 

@@ -15,6 +15,13 @@ export const problemDetailSchema = z.object({
       }),
     )
     .optional(),
+  error: z
+    .object({
+      code: z.string(),
+      message: z.string(),
+      details: z.record(z.string(), z.unknown()).optional(),
+    })
+    .optional(),
 });
 
 export type ProblemDetail = z.infer<typeof problemDetailSchema>;

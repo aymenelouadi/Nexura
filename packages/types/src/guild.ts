@@ -7,6 +7,7 @@ export const guildSummarySchema = z.object({
   id: z.string().regex(/^\d{17,20}$/),
   name: z.string().min(1),
   icon: z.string().nullable(),
+  memberCount: z.number().int().nullable(),
   canManage: z.boolean(),
   isOwner: z.boolean(),
   hasAdmin: z.boolean(),

@@ -9,6 +9,7 @@ export * from './components/dialog.js';
 export * from './components/dropdown-menu.js';
 export * from './components/core-form-section.js';
 export * from './components/core-save-bar.js';
+export * from './components/core-switch.js';
 export * from './components/core-tabs.js';
 export * from './components/data-table/index.js';
 export * from './components/empty.js';

@@ -38,7 +38,7 @@ const multerFileFilter = (
   file: { mimetype: string; originalname: string },
   callback: (error: Error | null, acceptFile: boolean) => void,
 ) => {
-  const allowed = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml']);
+  const allowed = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml', 'image/x-icon']);
   if (allowed.has(file.mimetype)) {
     callback(null, true);
   } else {

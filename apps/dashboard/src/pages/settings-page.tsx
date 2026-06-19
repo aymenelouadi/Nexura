@@ -63,6 +63,7 @@ export function SettingsPage() {
       api.updateSettingsSection(section, patch),
     onSuccess: (next) => {
       queryClient.setQueryData(['app-settings'], next);
+      void queryClient.invalidateQueries({ queryKey: ['app-settings'] });
       toast.success('Settings saved.');
     },
     onError: (error) => toast.error(error instanceof Error ? error.message : 'Failed to save settings.'),
