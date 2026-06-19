@@ -8,6 +8,8 @@ import {
 } from '@nexura/ui';
 import type { User } from '@nexura/types';
 import { MenuIcon, SearchIcon } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 
 import { AppNavigation } from './app-navigation.js';
 import { Brand } from './brand.js';
@@ -17,11 +19,17 @@ import { useAppName } from '../hooks/use-app-name.js';
 
 export function TopHeader({ user }: { user: User }) {
   const appName = useAppName();
+  const location = useLocation();
+  const [sheetOpen, setSheetOpen] = useState(false);
+
+  useEffect(() => {
+    setSheetOpen(false);
+  }, [location.pathname]);
 
   return (
     <header className="sticky top-0 z-20 border-b border-border bg-background/95 backdrop-blur">
       <div className="flex h-16 items-center gap-3 px-4 sm:px-6 lg:px-8">
-        <Sheet>
+        <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
           <SheetTrigger asChild>
             <Button variant="ghost" size="icon" className="lg:hidden" aria-label="Open menu">
               <MenuIcon className="size-5" />

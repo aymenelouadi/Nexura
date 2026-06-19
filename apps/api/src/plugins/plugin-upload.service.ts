@@ -12,6 +12,7 @@ import semver from 'semver';
 import { PluginDiscoveryService } from './plugin-discovery.service.js';
 import { PluginManager } from './plugin-manager.service.js';
 import { PluginMigrationService } from './plugin-migration.service.js';
+import { PluginOperationException } from './plugin-operation.exception.js';
 import { PluginRepository } from './plugin.repository.js';
 
 const ALLOWED_PLUGIN_ID = /^[a-z0-9-_]+$/u;
@@ -54,6 +55,13 @@ export class PluginUploadService {
   ) {}
 
   async upload(file: MulterFile, guildId: string): Promise<PluginManifest> {
+    if (!file?.path) {
+      throw new PluginOperationException(
+        'PLUGIN_UPLOAD_FILE_MISSING',
+        'No plugin archive file was received.',
+        400,
+      );
+    }
     this.validateArchiveFile(file);
 
     const tempDir = join(dirname(file.path), `extract-${Date.now()}`);

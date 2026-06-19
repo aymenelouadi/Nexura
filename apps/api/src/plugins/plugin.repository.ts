@@ -2,6 +2,8 @@ import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 import {
   guildPlugins,
   pluginLogs,
+  pluginStorage,
+  pluginTemplates,
   plugins,
   type Database,
   type PluginRecord,
@@ -13,7 +15,7 @@ import type {
   PluginLogLevel,
   PluginManifest,
 } from '@nexura/types';
-import { and, desc, eq, notInArray } from 'drizzle-orm';
+import { and, desc, eq, ne, notInArray, sql } from 'drizzle-orm';
 
 import { DATABASE } from '../config/tokens.js';
 
@@ -129,6 +131,36 @@ export class PluginRepository {
       destination: row.destination,
       createdAt: row.createdAt.toISOString(),
     }));
+  }
+
+  async deleteGuildPlugin(guildId: string, pluginId: string): Promise<void> {
+    await this.database
+      .delete(guildPlugins)
+      .where(and(eq(guildPlugins.guildId, guildId), eq(guildPlugins.pluginId, pluginId)));
+  }
+
+  async deletePluginData(guildId: string, pluginId: string): Promise<void> {
+    await this.database
+      .delete(pluginLogs)
+      .where(and(eq(pluginLogs.guildId, guildId), eq(pluginLogs.pluginId, pluginId)));
+    await this.database
+      .delete(pluginStorage)
+      .where(and(eq(pluginStorage.guildId, guildId), eq(pluginStorage.pluginId, pluginId)));
+    await this.database
+      .delete(pluginTemplates)
+      .where(and(eq(pluginTemplates.guildId, guildId), eq(pluginTemplates.pluginId, pluginId)));
+  }
+
+  async isPluginUsedByOtherGuilds(pluginId: string, excludeGuildId: string): Promise<boolean> {
+    const rows = await this.database
+      .select({ count: sql<number>`count(*)::int` })
+      .from(guildPlugins)
+      .where(and(eq(guildPlugins.pluginId, pluginId), ne(guildPlugins.guildId, excludeGuildId)));
+    return (rows[0]?.count ?? 0) > 0;
+  }
+
+  async deletePluginRecord(pluginId: string): Promise<void> {
+    await this.database.delete(plugins).where(eq(plugins.id, pluginId));
   }
 }
 

@@ -78,7 +78,9 @@ const mockPluginManager = {
   getPluginStatus: vi.fn().mockResolvedValue({ id: 'welcome', enabled: false }),
   enablePlugin: vi.fn().mockResolvedValue({ id: 'welcome', name: 'Welcome', enabled: true }),
   disablePlugin: vi.fn().mockResolvedValue({ id: 'welcome', name: 'Welcome', enabled: false }),
+  deletePlugin: vi.fn().mockResolvedValue(undefined),
   listPluginLogs: vi.fn().mockResolvedValue([]),
+  reloadManifests: vi.fn().mockResolvedValue([]),
 };
 
 class MockGuildAccessService {
@@ -300,6 +302,42 @@ describe('AppController (e2e)', () => {
       expect(response.body.error).toMatchObject({
         code: 'PLUGIN_ENABLE_FAILED',
         details: expect.objectContaining({ pluginId: 'welcome' }),
+      });
+    });
+
+    it('DELETE /api/v1/guilds/:guildId/plugins/:pluginId deletes a plugin', async () => {
+      await request(app.getHttpServer())
+        .delete('/api/v1/guilds/1111111111111111111/plugins/welcome')
+        .send({ deleteData: false })
+        .expect(204);
+
+      expect(mockPluginManager.deletePlugin).toHaveBeenCalledWith(
+        '1111111111111111111',
+        'welcome',
+        false,
+      );
+    });
+
+    it('DELETE with deleteData flag passes the flag through', async () => {
+      await request(app.getHttpServer())
+        .delete('/api/v1/guilds/1111111111111111111/plugins/welcome')
+        .send({ deleteData: true })
+        .expect(204);
+
+      expect(mockPluginManager.deletePlugin).toHaveBeenCalledWith(
+        '1111111111111111111',
+        'welcome',
+        true,
+      );
+    });
+
+    it('POST upload without a file returns structured 400 error', async () => {
+      const response = await request(app.getHttpServer())
+        .post('/api/v1/guilds/1111111111111111111/plugins/upload')
+        .expect(400);
+
+      expect(response.body.error).toMatchObject({
+        code: 'PLUGIN_UPLOAD_FILE_MISSING',
       });
     });
   });

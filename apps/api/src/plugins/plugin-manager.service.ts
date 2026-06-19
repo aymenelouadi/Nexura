@@ -5,6 +5,7 @@ import {
   type OnApplicationBootstrap,
 } from '@nestjs/common';
 import type { GuildPlugin, PluginDashboard, PluginLog, PluginLogLevel, PluginManifest } from '@nexura/types';
+import { rm } from 'node:fs/promises';
 
 import { PluginDiscoveryService } from './plugin-discovery.service.js';
 import { PluginMigrationService } from './plugin-migration.service.js';
@@ -82,6 +83,24 @@ export class PluginManager implements OnApplicationBootstrap {
   async listPluginLogs(guildId: string, pluginId: string): Promise<PluginLog[]> {
     await this.pluginRepository.getPlugin(pluginId);
     return this.pluginRepository.listLogs(guildId, pluginId);
+  }
+
+  async deletePlugin(guildId: string, pluginId: string, deleteData: boolean): Promise<void> {
+    await this.pluginRepository.getPlugin(pluginId);
+    await this.pluginRepository.setEnabled(guildId, pluginId, false);
+    if (deleteData) {
+      await this.pluginRepository.deletePluginData(guildId, pluginId);
+    }
+    await this.pluginRepository.deleteGuildPlugin(guildId, pluginId);
+    await this.writePluginLog(guildId, pluginId, 'INFO', 'Plugin deleted.', { deleteData });
+    const usedByOthers = await this.pluginRepository.isPluginUsedByOtherGuilds(pluginId, guildId);
+    if (!usedByOthers) {
+      const pluginDir = this.pluginDiscoveryService.getInstalledPluginDirectory(pluginId);
+      await rm(pluginDir, { recursive: true, force: true }).catch(() => {});
+      this.manifestMap.delete(pluginId);
+      await this.pluginRepository.deletePluginRecord(pluginId);
+    }
+    await this.reloadManifests();
   }
 
   listGuildLogs(guildId: string): Promise<PluginLog[]> {

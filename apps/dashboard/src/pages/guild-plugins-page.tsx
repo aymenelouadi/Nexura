@@ -15,6 +15,13 @@ import {
   Badge,
   Button,
   Card,
+  Checkbox,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -25,6 +32,7 @@ import {
   EmptyHeader,
   EmptyTitle,
   Input,
+  Label,
   Select,
   SelectContent,
   SelectItem,
@@ -57,8 +65,9 @@ import {
   TrashIcon,
   UploadIcon,
 } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 
 import { ErrorState } from '../components/error-state.js';
 import { PageHeader } from '../components/page-header.js';
@@ -66,7 +75,11 @@ import { PluginUploadDialog } from '../components/plugin-upload-dialog.js';
 import { guildPluginsQuery } from '../hooks/queries.js';
 import { useGuildWorkspace } from '../hooks/use-guild-workspace.js';
 import { api } from '../lib/api-client.js';
-import { getGuildDashboardPath, getGuildPluginPath } from '../lib/guild-actions.js';
+import {
+  getGuildDashboardPath,
+  getGuildMonitoringLogsPath,
+  getGuildPluginPath,
+} from '../lib/guild-actions.js';
 
 interface PluginMutation {
   pluginId: string;
@@ -82,6 +95,8 @@ export function GuildPluginsPage() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [uploadOpen, setUploadOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<GuildPlugin | null>(null);
+  const [deleteData, setDeleteData] = useState(false);
 
   const plugins = useQuery({
     ...guildPluginsQuery(guildId),
@@ -93,16 +108,43 @@ export function GuildPluginsPage() {
       enabled
         ? api.enableGuildPlugin(guildId, pluginId)
         : api.disableGuildPlugin(guildId, pluginId),
-    onSuccess: async () => {
+    onSuccess: async (_data, variables) => {
       await queryClient.invalidateQueries({ queryKey: ['guilds', guildId, 'plugins'] });
+      toast.success(`Plugin ${variables.enabled ? 'enabled' : 'disabled'}.`);
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || 'Failed to update plugin.');
     },
   });
+
+  const deletePlugin = useMutation({
+    mutationFn: ({ pluginId, deleteData }: { pluginId: string; deleteData: boolean }) =>
+      api.deleteGuildPlugin(guildId, pluginId, deleteData),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['guilds', guildId, 'plugins'] });
+      toast.success('Plugin deleted.');
+      setDeleteTarget(null);
+      setDeleteData(false);
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || 'Failed to delete plugin.');
+    },
+  });
+
+  const handleRefresh = useCallback(async () => {
+    try {
+      await queryClient.refetchQueries({ queryKey: ['guilds', guildId, 'plugins'] });
+      toast.success('Plugin list refreshed.');
+    } catch {
+      toast.error('Failed to refresh plugin list.');
+    }
+  }, [queryClient, guildId]);
 
   if (guild.isLoading) {
     return <PluginPageSkeleton />;
   }
   if (guild.isError) {
-    return <ErrorState message={guild.error.message} onRetry={() => void guild.refetch()} />;
+    return <ErrorState message={(guild.error as Error).message} onRetry={() => void guild.refetch()} />;
   }
   if (!guild.data) {
     return <PluginPageSkeleton />;
@@ -119,6 +161,8 @@ export function GuildPluginsPage() {
     );
   }
 
+  const isRefreshing = plugins.isFetching && !plugins.isLoading;
+
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
@@ -127,8 +171,14 @@ export function GuildPluginsPage() {
         description="Manage installed extensions and upload new plugins for this server."
         actions={
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={() => void plugins.refetch()}>
-              <RefreshCwIcon className="size-4" />
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleRefresh}
+              disabled={isRefreshing}
+              aria-label="Refresh plugin list"
+            >
+              <RefreshCwIcon className={isRefreshing ? 'size-4 animate-spin' : 'size-4'} />
               <span className="hidden sm:inline">Refresh</span>
             </Button>
             <Button size="sm" onClick={() => setUploadOpen(true)}>
@@ -157,7 +207,7 @@ export function GuildPluginsPage() {
 
       {plugins.isLoading ? <PluginTableSkeleton /> : null}
       {plugins.isError ? (
-        <ErrorState message={plugins.error.message} onRetry={() => void plugins.refetch()} />
+        <ErrorState message={(plugins.error as Error).message} onRetry={() => void plugins.refetch()} />
       ) : null}
       {plugins.isSuccess ? (
         <PluginManager
@@ -166,15 +216,34 @@ export function GuildPluginsPage() {
           onSearchChange={setSearch}
           statusFilter={statusFilter}
           onStatusFilterChange={setStatusFilter}
-        pendingPluginId={updatePlugin.isPending ? updatePlugin.variables?.pluginId : null}
-        onToggle={(pluginId, enabled) => updatePlugin.mutate({ pluginId, enabled })}
-        onManage={(pluginId) => navigate(getGuildPluginPath(guildId, pluginId))}
-        onLogs={(pluginId) => navigate(`${getGuildPluginPath(guildId, pluginId)}?tab=logs`)}
-        onUpload={() => setUploadOpen(true)}
-      />
+          pendingPluginId={updatePlugin.isPending ? updatePlugin.variables?.pluginId : null}
+          onToggle={(pluginId, enabled) => updatePlugin.mutate({ pluginId, enabled })}
+          onManage={(pluginId) => navigate(getGuildPluginPath(guildId, pluginId))}
+          onLogs={(pluginId) =>
+            navigate(`${getGuildMonitoringLogsPath(guildId)}?plugin=${encodeURIComponent(pluginId)}`)
+          }
+          onUpload={() => setUploadOpen(true)}
+          onDelete={(plugin) => setDeleteTarget(plugin)}
+        />
       ) : null}
 
       <PluginUploadDialog guildId={guildId} open={uploadOpen} onOpenChange={setUploadOpen} />
+
+      <DeletePluginDialog
+        plugin={deleteTarget}
+        deleteData={deleteData}
+        onDeleteDataChange={setDeleteData}
+        onCancel={() => {
+          setDeleteTarget(null);
+          setDeleteData(false);
+        }}
+        onConfirm={() => {
+          if (deleteTarget) {
+            deletePlugin.mutate({ pluginId: deleteTarget.id, deleteData });
+          }
+        }}
+        isPending={deletePlugin.isPending}
+      />
     </div>
   );
 }
@@ -190,6 +259,7 @@ interface PluginManagerProps {
   onManage: (pluginId: string) => void;
   onLogs: (pluginId: string) => void;
   onUpload: () => void;
+  onDelete: (plugin: GuildPlugin) => void;
 }
 
 function PluginManager({
@@ -203,6 +273,7 @@ function PluginManager({
   onManage,
   onLogs,
   onUpload,
+  onDelete,
 }: PluginManagerProps) {
   const filteredPlugins = useFilteredPlugins(plugins, search, statusFilter);
   const [sorting, setSorting] = useState<SortingState>([{ id: 'name', desc: false }]);
@@ -272,12 +343,13 @@ function PluginManager({
             onToggle={() => onToggle(row.original.id, !row.original.enabled)}
             onManage={() => onManage(row.original.id)}
             onLogs={() => onLogs(row.original.id)}
+            onDelete={() => onDelete(row.original)}
           />
         ),
         enableSorting: false,
       },
     ],
-    [onToggle, onManage, onLogs, pendingPluginId],
+    [onToggle, onManage, onLogs, onDelete, pendingPluginId],
   );
 
   const table = useReactTable({
@@ -368,6 +440,7 @@ function PluginManager({
                 onToggle={() => onToggle(plugin.id, !plugin.enabled)}
                 onManage={() => onManage(plugin.id)}
                 onLogs={() => onLogs(plugin.id)}
+                onDelete={() => onDelete(plugin)}
               />
             ))}
           </div>
@@ -421,9 +494,10 @@ interface PluginActionsProps {
   onToggle: () => void;
   onManage: () => void;
   onLogs: () => void;
+  onDelete: () => void;
 }
 
-function PluginActions({ plugin, pending, onToggle, onManage, onLogs }: PluginActionsProps) {
+function PluginActions({ plugin, pending, onToggle, onManage, onLogs, onDelete }: PluginActionsProps) {
   const hasDashboard = plugin.dashboard !== null;
 
   return (
@@ -433,6 +507,7 @@ function PluginActions({ plugin, pending, onToggle, onManage, onLogs }: PluginAc
         variant={plugin.enabled ? 'outline' : 'default'}
         disabled={pending}
         onClick={onToggle}
+        aria-label={plugin.enabled ? `Disable ${plugin.name}` : `Enable ${plugin.name}`}
       >
         {pending ? (
           <Spinner />
@@ -446,7 +521,7 @@ function PluginActions({ plugin, pending, onToggle, onManage, onLogs }: PluginAc
 
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button size="sm" variant="ghost">
+          <Button size="sm" variant="ghost" aria-label={`Actions for ${plugin.name}`}>
             <MoreHorizontalIcon className="size-4" />
           </Button>
         </DropdownMenuTrigger>
@@ -463,7 +538,7 @@ function PluginActions({ plugin, pending, onToggle, onManage, onLogs }: PluginAc
               No dashboard
             </DropdownMenuItem>
           ) : null}
-          <DropdownMenuItem onClick={onLogs}>
+          <DropdownMenuItem onClick={onLogs} aria-label={`View logs for ${plugin.name}`}>
             <FileClockIcon className="mr-2 size-4" />
             View logs
           </DropdownMenuItem>
@@ -472,7 +547,11 @@ function PluginActions({ plugin, pending, onToggle, onManage, onLogs }: PluginAc
             <RefreshCwIcon className="mr-2 size-4" />
             Update
           </DropdownMenuItem>
-          <DropdownMenuItem disabled className="text-destructive focus:text-destructive">
+          <DropdownMenuItem
+            onClick={onDelete}
+            className="text-destructive focus:text-destructive"
+            aria-label={`Delete ${plugin.name}`}
+          >
             <TrashIcon className="mr-2 size-4" />
             Delete
           </DropdownMenuItem>
@@ -488,12 +567,14 @@ function PluginCard({
   onToggle,
   onManage,
   onLogs,
+  onDelete,
 }: {
   plugin: GuildPlugin;
   pending: boolean;
   onToggle: () => void;
   onManage: () => void;
   onLogs: () => void;
+  onDelete: () => void;
 }) {
   const hasDashboard = plugin.dashboard !== null;
 
@@ -536,6 +617,7 @@ function PluginCard({
           disabled={pending}
           onClick={onToggle}
           className="flex-1"
+          aria-label={plugin.enabled ? `Disable ${plugin.name}` : `Enable ${plugin.name}`}
         >
           {pending ? <Spinner /> : plugin.enabled ? 'Disable' : 'Enable'}
         </Button>
@@ -544,8 +626,17 @@ function PluginCard({
             Manage
           </Button>
         ) : null}
-        <Button size="sm" variant="ghost" onClick={onLogs}>
+        <Button size="sm" variant="ghost" onClick={onLogs} aria-label={`View logs for ${plugin.name}`}>
           Logs
+        </Button>
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={onDelete}
+          className="text-destructive hover:text-destructive"
+          aria-label={`Delete ${plugin.name}`}
+        >
+          <TrashIcon className="size-4" />
         </Button>
       </div>
     </div>
@@ -594,5 +685,64 @@ function PluginTableSkeleton() {
       </div>
       <Skeleton className="h-96 w-full" />
     </div>
+  );
+}
+
+interface DeletePluginDialogProps {
+  plugin: GuildPlugin | null;
+  deleteData: boolean;
+  onDeleteDataChange: (value: boolean) => void;
+  onCancel: () => void;
+  onConfirm: () => void;
+  isPending: boolean;
+}
+
+function DeletePluginDialog({
+  plugin,
+  deleteData,
+  onDeleteDataChange,
+  onCancel,
+  onConfirm,
+  isPending,
+}: DeletePluginDialogProps) {
+  return (
+    <Dialog open={plugin !== null} onOpenChange={(open) => { if (!open) onCancel(); }}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Delete plugin</DialogTitle>
+          <DialogDescription>
+            {plugin
+              ? `Remove ${plugin.name} from this server. The plugin will be disabled first.`
+              : ''}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="flex flex-col gap-4 py-2">
+          <label className="flex items-start gap-3 rounded-md border border-border p-3 cursor-pointer">
+            <Checkbox
+              checked={deleteData}
+              onCheckedChange={(checked) => onDeleteDataChange(checked === true)}
+              className="mt-0.5"
+              id="delete-plugin-data"
+            />
+            <div className="flex flex-col gap-1">
+              <Label htmlFor="delete-plugin-data" className="cursor-pointer">
+                Also delete plugin data
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                Removes logs, storage, and templates for this server. This cannot be undone.
+              </p>
+            </div>
+          </label>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onCancel} disabled={isPending}>
+            Cancel
+          </Button>
+          <Button variant="destructive" onClick={onConfirm} disabled={isPending}>
+            {isPending ? 'Deleting...' : 'Delete plugin'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

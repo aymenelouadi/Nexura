@@ -10,6 +10,13 @@ import { api } from '../lib/api-client.js';
 import { SelectedGuildProvider } from '../state/selected-guild-context.js';
 import { GuildPluginsPage } from './guild-plugins-page.js';
 
+vi.mock('sonner', () => ({
+  toast: {
+    success: vi.fn(),
+    error: vi.fn(),
+  },
+}));
+
 const mockGuildId = '1111111111111111111';
 
 const welcomePlugin: GuildPlugin = {
@@ -53,6 +60,7 @@ function renderPage(element: ReactElement) {
           <Routes>
             <Route path="/dashboard/:guildId/plugins" element={element} />
             <Route path="/dashboard/:guildId/plugins/:pluginId" element={<div data-testid="plugin-detail" />} />
+            <Route path="/dashboard/:guildId/monitoring/logs" element={<div data-testid="logs-page" />} />
           </Routes>
         </MemoryRouter>
       </SelectedGuildProvider>
@@ -113,7 +121,7 @@ describe('GuildPluginsPage', () => {
     const disableMock = vi.spyOn(api, 'disableGuildPlugin').mockResolvedValue(welcomePlugin);
     renderPage(<GuildPluginsPage />);
     const welcomeRow = await screen.findByTestId('plugin-row-welcome');
-    const toggle = within(welcomeRow).getByRole('button', { name: /disable/i });
+    const toggle = within(welcomeRow).getByRole('button', { name: /disable welcome/i });
     await user.click(toggle);
     await waitFor(() => expect(disableMock).toHaveBeenCalledWith(mockGuildId, 'welcome'));
   });
@@ -122,10 +130,44 @@ describe('GuildPluginsPage', () => {
     const user = userEvent.setup();
     renderPage(<GuildPluginsPage />);
     const welcomeRow = await screen.findByTestId('plugin-row-welcome');
-    const menuButton = within(welcomeRow).getByRole('button', { name: '' });
+    const menuButton = within(welcomeRow).getByRole('button', { name: /actions for welcome/i });
     await user.click(menuButton);
     const manageButton = await screen.findByRole('menuitem', { name: /manage welcome/i });
     await user.click(manageButton);
     await waitFor(() => expect(screen.getByTestId('plugin-detail')).toBeInTheDocument());
+  });
+
+  it('navigates to logs page with plugin filter when view logs is clicked', async () => {
+    const user = userEvent.setup();
+    renderPage(<GuildPluginsPage />);
+    const welcomeRow = await screen.findByTestId('plugin-row-welcome');
+    const menuButton = within(welcomeRow).getByRole('button', { name: /actions for welcome/i });
+    await user.click(menuButton);
+    const logsButton = await screen.findByRole('menuitem', { name: /view logs for welcome/i });
+    await user.click(logsButton);
+    await waitFor(() => expect(screen.getByTestId('logs-page')).toBeInTheDocument());
+  });
+
+  it('opens delete dialog and calls delete API on confirm', async () => {
+    const user = userEvent.setup();
+    const deleteMock = vi.spyOn(api, 'deleteGuildPlugin').mockResolvedValue(undefined);
+    renderPage(<GuildPluginsPage />);
+    const welcomeRow = await screen.findByTestId('plugin-row-welcome');
+    const menuButton = within(welcomeRow).getByRole('button', { name: /actions for welcome/i });
+    await user.click(menuButton);
+    const deleteMenuItem = await screen.findByRole('menuitem', { name: /delete welcome/i });
+    await user.click(deleteMenuItem);
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog).toBeInTheDocument();
+    const confirmButton = within(dialog).getByRole('button', { name: /delete plugin/i });
+    await user.click(confirmButton);
+    await waitFor(() => expect(deleteMock).toHaveBeenCalledWith(mockGuildId, 'welcome', false));
+  });
+
+  it('refresh button is present and clickable', async () => {
+    renderPage(<GuildPluginsPage />);
+    const refreshButton = await screen.findByRole('button', { name: /refresh plugin list/i });
+    expect(refreshButton).toBeInTheDocument();
+    expect(refreshButton).not.toBeDisabled();
   });
 });

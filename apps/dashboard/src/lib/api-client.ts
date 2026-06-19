@@ -121,6 +121,15 @@ export const api = {
       guildPluginSchema,
       { method: 'POST' },
     ),
+  deleteGuildPlugin: (guildId: string, pluginId: string, deleteData: boolean) =>
+    requestWithoutContent(
+      `/api/v1/guilds/${encodeURIComponent(guildId)}/plugins/${encodeURIComponent(pluginId)}`,
+      {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deleteData }),
+      },
+    ),
   getGuildPluginLogs: (guildId: string, pluginId: string) =>
     request(
       `/api/v1/guilds/${encodeURIComponent(guildId)}/plugins/${encodeURIComponent(pluginId)}/logs`,
@@ -247,6 +256,7 @@ export const api = {
   uploadGuildPlugin: (guildId: string, file: File) => Promise<GuildPlugin>;
   enableGuildPlugin: (guildId: string, pluginId: string) => Promise<GuildPlugin>;
   disableGuildPlugin: (guildId: string, pluginId: string) => Promise<GuildPlugin>;
+  deleteGuildPlugin: (guildId: string, pluginId: string, deleteData: boolean) => Promise<void>;
   getGuildPluginLogs: (guildId: string, pluginId: string) => Promise<PluginLogListResponse>;
   getGuildPluginCommands: (guildId: string, pluginId: string) => Promise<PluginCommandListResponse>;
   updateGuildPluginCommand: (

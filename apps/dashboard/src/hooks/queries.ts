@@ -2,6 +2,18 @@ import { queryOptions } from '@tanstack/react-query';
 
 import { api, ApiError } from '../lib/api-client.js';
 
+const safeRetry = (failureCount: number, error: unknown): boolean => {
+  if (error instanceof ApiError) {
+    if (error.status === 401 || error.status === 403 || error.status === 404) {
+      return false;
+    }
+    if (error.status >= 500) {
+      return failureCount < 1;
+    }
+  }
+  return failureCount < 2;
+};
+
 export const currentUserQuery = queryOptions({
   queryKey: ['current-user'],
   queryFn: api.getCurrentUser,
@@ -19,12 +31,7 @@ export const guildsQuery = queryOptions({
   queryKey: ['guilds'],
   queryFn: api.getGuilds,
   refetchOnWindowFocus: false,
-  retry: (failureCount, error) => {
-    if (error instanceof ApiError && (error.status === 401 || error.status >= 500)) {
-      return false;
-    }
-    return failureCount < 2;
-  },
+  retry: safeRetry,
   staleTime: 30_000,
 });
 
@@ -32,6 +39,8 @@ export function guildQuery(guildId: string) {
   return queryOptions({
     queryKey: ['guilds', guildId],
     queryFn: () => api.getGuild(guildId),
+    refetchOnWindowFocus: false,
+    retry: safeRetry,
     staleTime: 30_000,
   });
 }
@@ -40,6 +49,8 @@ export function guildPluginsQuery(guildId: string) {
   return queryOptions({
     queryKey: ['guilds', guildId, 'plugins'],
     queryFn: () => api.getGuildPlugins(guildId),
+    refetchOnWindowFocus: false,
+    retry: safeRetry,
     staleTime: 15_000,
   });
 }

@@ -43,6 +43,7 @@ export class PluginHost {
   private refreshTimer: ReturnType<typeof setInterval> | undefined;
   private refreshing = false;
   private refreshFailures = 0;
+  private nextRefreshFailureLogAt = 0;
 
   constructor(
     private readonly database: Database,
@@ -64,11 +65,12 @@ export class PluginHost {
             ? ((error.cause as Error | undefined)?.message ?? '')
             : '';
         this.refreshFailures += 1;
-        this.logger.error({ err: message, cause }, 'Plugin host refresh failed');
+        const now = Date.now();
         const delay = Math.min(1_000 * 2 ** (this.refreshFailures - 1), 60_000);
-        setTimeout(() => {
-          this.refreshFailures = Math.max(this.refreshFailures - 1, 0);
-        }, delay);
+        if (now >= this.nextRefreshFailureLogAt) {
+          this.logger.error({ err: message, cause }, 'Plugin host refresh failed');
+          this.nextRefreshFailureLogAt = now + delay;
+        }
       });
     }, 10_000);
     this.refreshTimer.unref();
@@ -105,7 +107,6 @@ export class PluginHost {
     if (this.refreshing) return;
     this.refreshing = true;
     try {
-      this.refreshFailures = 0;
       const enabled = await this.database
         .select({ guildId: guildPlugins.guildId, pluginId: guildPlugins.pluginId })
         .from(guildPlugins)
@@ -126,6 +127,8 @@ export class PluginHost {
         }
       }
       await this.syncSlashCommands(new Set(enabled.map((row) => row.guildId)));
+      this.refreshFailures = 0;
+      this.nextRefreshFailureLogAt = 0;
     } finally {
       this.refreshing = false;
     }

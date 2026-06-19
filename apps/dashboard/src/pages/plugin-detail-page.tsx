@@ -47,7 +47,7 @@ export function PluginDetailPage() {
     return <PluginDetailSkeleton />;
   }
   if (guild.isError) {
-    return <ErrorState message={guild.error.message} onRetry={() => void guild.refetch()} />;
+    return <ErrorState message={(guild.error as Error).message} onRetry={() => void guild.refetch()} />;
   }
   if (!guild.data || !guild.data.botConnected) {
     return (
@@ -59,7 +59,7 @@ export function PluginDetailPage() {
     );
   }
   if (plugins.isError) {
-    return <ErrorState message={plugins.error.message} onRetry={() => void plugins.refetch()} />;
+    return <ErrorState message={(plugins.error as Error).message} onRetry={() => void plugins.refetch()} />;
   }
   if (!plugin) {
     return (

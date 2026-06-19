@@ -5,6 +5,7 @@ import { Badge, Card, CardContent, CardHeader, CardTitle, DataTableSkeleton, Sel
 import type { PluginLog, PluginLogLevel } from '@nexura/types';
 import { FileClockIcon, SearchIcon, XIcon } from 'lucide-react';
 import { useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 
 import { ErrorState } from '../components/error-state.js';
 import { PageHeader } from '../components/page-header.js';
@@ -16,9 +17,11 @@ const levels: PluginLogLevel[] = ['DEBUG', 'INFO', 'WARN', 'ERROR', 'AUDIT'];
 
 export function PluginLogsPage() {
   const { guildId, guild } = useGuildWorkspace();
+  const [searchParams] = useSearchParams();
+  const initialPluginFilter = searchParams.get('plugin');
   const [search, setSearch] = useState('');
   const [levelFilter, setLevelFilter] = useState<PluginLogLevel | null>(null);
-  const [pluginFilter, setPluginFilter] = useState<string | null>(null);
+  const [pluginFilter, setPluginFilter] = useState<string | null>(initialPluginFilter);
 
   const logs = useQuery({
     ...guildPluginLogsQuery(guildId),
@@ -88,7 +91,7 @@ export function PluginLogsPage() {
     return <DataTableSkeleton columns={4} rows={5} />;
   }
   if (guild.isError) {
-    return <ErrorState message={guild.error.message} onRetry={() => void guild.refetch()} />;
+    return <ErrorState message={(guild.error as Error).message} onRetry={() => void guild.refetch()} />;
   }
   if (logs.isError) {
     return <ErrorState message={logs.error.message} onRetry={() => void logs.refetch()} />;

@@ -6,6 +6,7 @@ import AdmZip from 'adm-zip';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { PluginUploadService } from './plugin-upload.service.js';
+import { PluginOperationException } from './plugin-operation.exception.js';
 import type { PluginDiscoveryService } from './plugin-discovery.service.js';
 import type { PluginManager } from './plugin-manager.service.js';
 import type { PluginMigrationService } from './plugin-migration.service.js';
@@ -287,5 +288,32 @@ describe('PluginUploadService', () => {
         '1111111111111111111',
       ),
     ).rejects.toThrow(ConflictException);
+  });
+
+  it('throws PluginOperationException when file.path is undefined', async () => {
+    const deps = createMockDeps();
+    const service = new PluginUploadService(
+      deps.pluginDiscoveryService,
+      deps.pluginManager,
+      deps.pluginRepository,
+      deps.pluginMigrationService,
+    );
+
+    await expect(
+      service.upload(
+        {
+          fieldname: 'file',
+          originalname: 'plugin.zip',
+          encoding: '7bit',
+          mimetype: 'application/zip',
+          size: 100,
+          destination: '',
+          filename: 'plugin.zip',
+          path: undefined as unknown as string,
+          buffer: Buffer.from(''),
+        },
+        '1111111111111111111',
+      ),
+    ).rejects.toThrow(PluginOperationException);
   });
 });

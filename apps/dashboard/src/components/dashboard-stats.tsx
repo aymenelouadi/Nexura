@@ -5,7 +5,7 @@ import { BotIcon, CircleCheckIcon, ServerIcon, ShieldCheckIcon } from 'lucide-re
 import { ErrorState } from './error-state.js';
 import { StatCard, StatCardSkeleton } from './stat-card.js';
 
-export function DashboardStats({ guilds }: { guilds: UseQueryResult<GuildListResponse, Error> }) {
+export function DashboardStats({ guilds }: { guilds: UseQueryResult<GuildListResponse, unknown> }) {
   if (guilds.isLoading) {
     return <DashboardStatsSkeleton />;
   }
@@ -14,7 +14,7 @@ export function DashboardStats({ guilds }: { guilds: UseQueryResult<GuildListRes
     return (
       <ErrorState
         title="Unable to load server summary"
-        message={guilds.error.message}
+        message={(guilds.error as Error).message}
         onRetry={() => void guilds.refetch()}
       />
     );

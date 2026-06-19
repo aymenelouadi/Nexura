@@ -45,7 +45,7 @@ function SelectedServer({ guildId }: { guildId: string }) {
     return <SelectedServerSkeleton />;
   }
   if (guild.isError) {
-    return <ErrorState message={guild.error.message} onRetry={() => void guild.refetch()} />;
+    return <ErrorState message={(guild.error as Error).message} onRetry={() => void guild.refetch()} />;
   }
   if (!guild.data) {
     return null;

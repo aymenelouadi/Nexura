@@ -91,6 +91,10 @@ export const pluginLogListResponseSchema = z.object({
   data: z.array(pluginLogSchema),
 });
 
+export const deletePluginSchema = z.object({
+  deleteData: z.boolean().default(false),
+});
+
 export type PluginCapabilities = z.infer<typeof pluginCapabilitiesSchema>;
 export type PluginDashboard = z.infer<typeof pluginDashboardShape>;
 export type PluginManifest = z.infer<typeof pluginManifestSchema>;
@@ -101,3 +105,4 @@ export type GuildPlugin = z.infer<typeof guildPluginSchema>;
 export type GuildPluginListResponse = z.infer<typeof guildPluginListResponseSchema>;
 export type PluginLog = z.infer<typeof pluginLogSchema>;
 export type PluginLogListResponse = z.infer<typeof pluginLogListResponseSchema>;
+export type DeletePluginRequest = z.infer<typeof deletePluginSchema>;

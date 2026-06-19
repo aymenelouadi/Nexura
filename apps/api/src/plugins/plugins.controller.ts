@@ -16,9 +16,13 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { diskStorage } from 'multer';
+import { mkdirSync } from 'node:fs';
+import { join } from 'node:path';
 import { isDiscordSnowflake } from '@nexura/shared';
 import {
   commandIdSchema,
+  deletePluginSchema,
   duplicatePluginTemplateSchema,
   pluginIdSchema,
   pluginStorageValueSchema,
@@ -26,6 +30,7 @@ import {
   testTemplateSchema,
   updatePluginCommandSchema,
   updatePluginLogSettingsSchema,
+  type DeletePluginRequest,
   type DuplicatePluginTemplate,
   type GuildPlugin,
   type GuildPluginListResponse,
@@ -77,7 +82,20 @@ interface MulterFile {
   buffer: Buffer;
 }
 
+const UPLOAD_TEMP_DIR = join(process.cwd(), 'storage', 'tmp', 'plugin-uploads');
+
 const pluginUploadInterceptor = FileInterceptor('file', {
+  storage: diskStorage({
+    destination: (_req, _file, cb) => {
+      mkdirSync(UPLOAD_TEMP_DIR, { recursive: true });
+      cb(null, UPLOAD_TEMP_DIR);
+    },
+    filename: (_req, file, cb) => {
+      const unique = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+      const ext = file.originalname.toLowerCase().split('.').pop() ?? 'zip';
+      cb(null, `${unique}.${ext}`);
+    },
+  }),
   limits: { fileSize: 50 * 1024 * 1024 },
   fileFilter: (_request, file, callback) => {
     const extension = file.originalname.toLowerCase().split('.').pop();
@@ -254,9 +272,16 @@ export class PluginsController {
   async uploadPlugin(
     @Req() request: Request,
     @Param('guildId', guildIdPipe) guildId: string,
-    @UploadedFile() file: MulterFile,
+    @UploadedFile() file: MulterFile | undefined,
   ): Promise<GuildPlugin> {
     await this.assertConnectedGuild(request, guildId);
+    if (!file?.path) {
+      throw new PluginOperationException(
+        'PLUGIN_UPLOAD_FILE_MISSING',
+        'No plugin archive file was received.',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
     const manifest = await this.pluginUploadService.upload(file, guildId);
     const plugin = await this.pluginManager.getPluginStatus(guildId, manifest.id);
     await this.activityService.record(request.session.userId!, {
@@ -337,6 +362,34 @@ export class PluginsController {
   ): Promise<PluginLogListResponse> {
     await this.assertConnectedGuild(request, guildId);
     return { data: await this.pluginManager.listPluginLogs(guildId, pluginId) };
+  }
+
+  @Delete(':pluginId')
+  @UseGuards(SameOriginGuard)
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async deletePlugin(
+    @Req() request: Request,
+    @Param('guildId', guildIdPipe) guildId: string,
+    @Param('pluginId', pluginIdPipe) pluginId: string,
+    @Body(new ZodValidationPipe(deletePluginSchema)) body: DeletePluginRequest,
+  ): Promise<void> {
+    await this.assertConnectedGuild(request, guildId);
+    try {
+      await this.pluginManager.deletePlugin(guildId, pluginId, body.deleteData);
+      await this.activityService.record(request.session.userId!, {
+        guildId,
+        pluginId,
+        action: 'plugin.deleted',
+        resourceType: 'plugin',
+        resourceId: pluginId,
+        type: 'plugin.deleted',
+        message: `Deleted plugin ${pluginId} from server ${guildId}`,
+        newValue: { deleted: true, dataRemoved: body.deleteData },
+        metadata: { pluginId, guildId, deleteData: body.deleteData },
+      });
+    } catch (error) {
+      throw this.toPluginOperationError('PLUGIN_DELETE_FAILED', error, pluginId);
+    }
   }
 
   private async assertConnectedGuild(request: Request, guildId: string): Promise<void> {

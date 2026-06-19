@@ -10,6 +10,7 @@ import {
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { UploadIcon, XIcon } from 'lucide-react';
 import { useCallback, useState } from 'react';
+import { toast } from 'sonner';
 
 import { api } from '../lib/api-client.js';
 
@@ -27,13 +28,19 @@ export function PluginUploadDialog({ guildId, open, onOpenChange }: PluginUpload
   const queryClient = useQueryClient();
   const [file, setFile] = useState<File | null>(null);
   const [dragActive, setDragActive] = useState(false);
+  const [validationError, setValidationError] = useState<string | null>(null);
 
   const upload = useMutation({
     mutationFn: (selectedFile: File) => api.uploadGuildPlugin(guildId, selectedFile),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['guilds', guildId, 'plugins'] });
+      toast.success('Plugin installed successfully.');
       setFile(null);
+      setValidationError(null);
       onOpenChange(false);
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || 'Failed to upload plugin.');
     },
   });
 
@@ -53,17 +60,19 @@ export function PluginUploadDialog({ guildId, open, onOpenChange }: PluginUpload
       upload.reset();
       if (!selectedFile) {
         setFile(null);
+        setValidationError(null);
         return;
       }
       const error = validateFile(selectedFile);
       if (error) {
-        upload.error = new Error(error);
+        setValidationError(error);
         setFile(null);
         return;
       }
+      setValidationError(null);
       setFile(selectedFile);
     },
-    [validateFile],
+    [validateFile, upload],
   );
 
   const handleDrop = useCallback(
@@ -87,11 +96,12 @@ export function PluginUploadDialog({ guildId, open, onOpenChange }: PluginUpload
 
   const handleClose = useCallback(() => {
     setFile(null);
+    setValidationError(null);
     upload.reset();
     onOpenChange(false);
   }, [onOpenChange, upload]);
 
-  const errorMessage = upload.error?.message ?? (file ? null : upload.error?.message);
+  const errorMessage = validationError ?? upload.error?.message ?? null;
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
@@ -134,7 +144,7 @@ export function PluginUploadDialog({ guildId, open, onOpenChange }: PluginUpload
               Browse files
             </Button>
             {file ? (
-              <Button size="sm" variant="ghost" onClick={() => setFile(null)}>
+              <Button size="sm" variant="ghost" onClick={() => { setFile(null); setValidationError(null); }}>
                 <XIcon className="size-4" />
               </Button>
             ) : null}
@@ -149,11 +159,11 @@ export function PluginUploadDialog({ guildId, open, onOpenChange }: PluginUpload
         </div>
 
         {errorMessage ? (
-          <p className="text-sm text-destructive">{errorMessage}</p>
+          <p className="text-sm text-destructive" role="alert">{errorMessage}</p>
         ) : null}
 
         <DialogFooter>
-          <Button variant="outline" onClick={handleClose}>
+          <Button variant="outline" onClick={handleClose} disabled={upload.isPending}>
             Cancel
           </Button>
           <Button
