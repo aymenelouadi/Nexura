@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, extname, join, normalize, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import sharp from 'sharp';
+import sharp, { type OutputInfo } from 'sharp';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const UPLOADS_DIR = resolve(join(__dirname, '..', '..', 'public', 'uploads'));
@@ -64,7 +64,7 @@ export class SettingsUploadService {
   private async transformImage(
     kind: 'logo' | 'favicon' | 'pwa_icon',
     file: UploadedFile,
-  ): Promise<{ data: Buffer; info: sharp.OutputInfo }> {
+  ): Promise<{ data: Buffer; info: OutputInfo }> {
     let pipeline = sharp(file.buffer);
 
     switch (kind) {
