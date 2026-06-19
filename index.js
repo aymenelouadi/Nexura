@@ -314,6 +314,7 @@ async function runDatabaseMigrations() {
 async function buildRuntimeServices() {
   const packageBuilds = [
     { name: 'types', segments: ['packages', 'types'], config: 'tsconfig.json' },
+    { name: 'core', segments: ['packages', 'core'], config: 'tsconfig.json' },
     { name: 'shared', segments: ['packages', 'shared'], config: 'tsconfig.build.json' },
     { name: 'database', segments: ['packages', 'database'], config: 'tsconfig.json' },
     { name: 'ui', segments: ['packages', 'ui'], config: 'tsconfig.json' },
