@@ -3,7 +3,12 @@ import type { ApiEnvironment } from '@nexura/shared';
 
 import { API_ENVIRONMENT } from '../config/tokens.js';
 
-const REQUIRED_BOT_PERMISSIONS = '0';
+/**
+ * Discord permission bitfield for the bot invite URL.
+ * VIEW_CHANNEL | SEND_MESSAGES | EMBED_LINKS | ATTACH_FILES | READ_MESSAGE_HISTORY
+ * | USE_EXTERNAL_EMOJIS | CREATE_INSTANT_INVITE | MANAGE_ROLES
+ */
+const REQUIRED_BOT_PERMISSIONS = '268815361';
 
 @Injectable()
 export class DiscordBotInviteService {
