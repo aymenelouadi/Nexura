@@ -35,7 +35,7 @@ async function main() {
     logger.ok(`Loaded ${loadedKeys.length} values from .env`);
 
     const config = validateEnvironment();
-    assertRequiredBinaries();
+    await assertRequiredBinaries();
     await assertPortAvailable(config.apiPort, 'API');
     await assertPortAvailable(config.dashboardPort, 'dashboard');
     await checkDatabaseConnectivity(config.databaseUrl);
@@ -218,7 +218,7 @@ function validateEnvironment() {
   };
 }
 
-function assertRequiredBinaries() {
+async function assertRequiredBinaries() {
   const binaries = [
     bin('packages', 'types', 'node_modules', '.bin', 'tsc'),
     bin('packages', 'shared', 'node_modules', '.bin', 'tsc'),
@@ -231,7 +231,31 @@ function assertRequiredBinaries() {
     path.join(ROOT, 'apps', 'dashboard', 'node_modules', 'vite', 'bin', 'vite.js'),
   ];
 
-  const missing = binaries.filter((binaryPath) => !fs.existsSync(binaryPath));
+  const checkMissing = () => binaries.filter((b) => !fs.existsSync(b));
+  let missing = checkMissing();
+
+  if (missing.length > 0) {
+    logger.info('Workspace binaries missing, installing dependencies...');
+
+    try {
+      const corepackPath = path.join(path.dirname(process.execPath), 'corepack');
+      await runCommand({ name: 'corepack', cwd: ROOT, command: corepackPath, args: ['enable', 'pnpm'] });
+    } catch {
+      logger.warn('corepack not available, trying npm');
+    }
+
+    try {
+      const pnpmBin = process.platform === 'win32'
+        ? path.join(ROOT, 'node_modules', '.bin', 'pnpm.cmd')
+        : path.join(ROOT, 'node_modules', '.bin', 'pnpm');
+      await runCommand({ name: 'pnpm-install', cwd: ROOT, command: pnpmBin, args: ['install'] });
+    } catch {
+      logger.warn('pnpm install via node_modules/.bin failed');
+    }
+
+    missing = checkMissing();
+  }
+
   if (missing.length > 0) {
     throw new Error(`Missing required binaries: ${missing.join(', ')}`);
   }
