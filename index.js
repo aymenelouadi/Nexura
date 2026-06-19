@@ -238,19 +238,14 @@ async function assertRequiredBinaries() {
     logger.info('Workspace binaries missing, installing dependencies...');
 
     try {
-      const corepackPath = path.join(path.dirname(process.execPath), 'corepack');
-      await runCommand({ name: 'corepack', cwd: ROOT, command: corepackPath, args: ['enable', 'pnpm'] });
+      await runCommand({
+        name: 'pnpm-install',
+        cwd: ROOT,
+        command: 'npx',
+        args: ['-y', 'pnpm@10', 'install'],
+      });
     } catch {
-      logger.warn('corepack not available, trying npm');
-    }
-
-    try {
-      const pnpmBin = process.platform === 'win32'
-        ? path.join(ROOT, 'node_modules', '.bin', 'pnpm.cmd')
-        : path.join(ROOT, 'node_modules', '.bin', 'pnpm');
-      await runCommand({ name: 'pnpm-install', cwd: ROOT, command: pnpmBin, args: ['install'] });
-    } catch {
-      logger.warn('pnpm install via node_modules/.bin failed');
+      logger.warn('pnpm install failed, workspace packages may be unavailable');
     }
 
     missing = checkMissing();

@@ -4,9 +4,9 @@
   "private": true,
   "description": "Open-source multi-guild Discord bot platform",
   "license": "MIT",
-  "packageManager": "pnpm@11.6.0",
+  "packageManager": "pnpm@10.34.3",
   "engines": {
-    "node": ">=22.0.0 <26"
+    "node": ">=20.19.0 <26"
   },
   "scripts": {
     "build": "turbo run build",
