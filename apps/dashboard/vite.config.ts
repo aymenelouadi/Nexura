@@ -7,8 +7,14 @@ export default defineConfig(() => {
   const vitePort = Number(process.env.PORT) || getDashboardPort(process.env.DASHBOARD_URL);
   const allowedHosts = getAllowedHosts(process.env.DASHBOARD_URL);
 
+  const isLocalDev = !allowedHosts || allowedHosts === true;
+  const plugins = [tailwindcss()];
+  if (isLocalDev) {
+    plugins.unshift(react());
+  }
+
   return {
-    plugins: [react(), tailwindcss()],
+    plugins,
     server: {
       port: vitePort,
       strictPort: true,
