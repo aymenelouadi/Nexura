@@ -3,18 +3,18 @@ import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
 
 export default defineConfig(() => {
-  const apiPort = Number(process.env.API_PORT ?? 4000);
-  const dashboardPort = getDashboardPort(process.env.DASHBOARD_URL);
+  const apiInternalPort = Number(process.env.API_INTERNAL_PORT || process.env.API_PORT || 4000);
+  const vitePort = Number(process.env.PORT) || getDashboardPort(process.env.DASHBOARD_URL);
 
   return {
     plugins: [react(), tailwindcss()],
     server: {
-      port: dashboardPort,
+      port: vitePort,
       strictPort: true,
       host: '0.0.0.0',
       proxy: {
         '/api': {
-          target: `http://127.0.0.1:${apiPort}`,
+          target: `http://127.0.0.1:${apiInternalPort}`,
           changeOrigin: true,
         },
       },

@@ -36,17 +36,20 @@ async function main() {
 
     const config = validateEnvironment();
     await assertRequiredBinaries();
-    await assertPortAvailable(config.apiPort, 'API');
-    await assertPortAvailable(config.dashboardPort, 'dashboard');
+    await assertPortAvailable(config.apiPort, 'dashboard');
+    await assertPortAvailable(config.apiInternalPort, 'API');
     await checkDatabaseConnectivity(config.databaseUrl);
     await runDatabaseMigrations();
     await buildRuntimeServices();
+
+    process.env.API_INTERNAL_PORT = String(config.apiInternalPort);
 
     startService({
       name: 'api',
       cwd: path.join(ROOT, 'apps', 'api'),
       command: process.execPath,
       args: ['dist/main.js'],
+      env: { ...process.env, API_PORT: String(config.apiInternalPort) },
     });
     await waitForHttp(config.apiHealthUrl, 'API health');
 
@@ -59,8 +62,9 @@ async function main() {
         '--config',
         'vite.config.ts',
       ],
+      env: { ...process.env, PORT: String(config.apiPort) },
     });
-    await waitForHttp(config.dashboardUrl, 'dashboard');
+    await waitForHttp(`http://127.0.0.1:${config.apiPort}/`, 'dashboard');
 
     const botState = { ready: false };
     const bot = startService({
@@ -190,7 +194,8 @@ function validateEnvironment() {
   const dashboardUrl = new URL(process.env.DASHBOARD_URL);
   const dashboardPort = getPortFromUrl(dashboardUrl);
   const apiPort = Number(process.env.API_PORT ?? 4000);
-  const apiHealthUrl = `http://127.0.0.1:${apiPort}/api/v1/health`;
+  const apiInternalPort = 4001;
+  const apiHealthUrl = `http://127.0.0.1:${apiInternalPort}/api/v1/health`;
   const redirectUrl = new URL(process.env.DISCORD_REDIRECT_URI);
 
   if (!Number.isInteger(apiPort) || apiPort <= 0) {
@@ -211,6 +216,7 @@ function validateEnvironment() {
 
   return {
     apiPort,
+    apiInternalPort,
     apiHealthUrl,
     dashboardPort,
     dashboardUrl: process.env.DASHBOARD_URL,
@@ -358,9 +364,9 @@ async function buildRuntimeServices() {
   logger.ok('Runtime builds are current');
 }
 
-function startService({ name, cwd, command, args, onStdoutLine }) {
+function startService({ name, cwd, command, args, onStdoutLine, env }) {
   logger.info(`Starting ${name}`);
-  const child = spawnCommand(command, args, cwd);
+  const child = spawnCommand(command, args, cwd, env);
   const service = {
     name,
     child,
@@ -450,12 +456,13 @@ async function runCommand({ name, cwd, command, args }) {
   }
 }
 
-function spawnCommand(command, args, cwd) {
+function spawnCommand(command, args, cwd, envOverride) {
+  const env = envOverride || process.env;
   const usesCommandShell = /\.cmd$/iu.test(command) || /\.bat$/iu.test(command);
   if (!usesCommandShell) {
     return spawn(command, args, {
       cwd,
-      env: process.env,
+      env,
       shell: false,
       stdio: ['ignore', 'pipe', 'pipe'],
       windowsHide: true,
@@ -464,7 +471,7 @@ function spawnCommand(command, args, cwd) {
 
   return spawn(process.env.ComSpec || 'cmd.exe', ['/d', '/s', '/c', command, ...args], {
     cwd,
-    env: process.env,
+    env,
     shell: false,
     stdio: ['ignore', 'pipe', 'pipe'],
     windowsHide: true,
