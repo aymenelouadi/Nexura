@@ -165,8 +165,8 @@ function validateEnvironment() {
     throw new Error(`Missing required .env keys: ${missingKeys.join(', ')}`);
   }
 
-  if (!process.env.DATABASE_URL.startsWith('postgresql://')) {
-    throw new Error('DATABASE_URL must start with postgresql://');
+  if (!process.env.DATABASE_URL.startsWith('postgresql://') && !process.env.DATABASE_URL.startsWith('postgres://')) {
+    throw new Error('DATABASE_URL must start with postgresql:// or postgres://');
   }
 
   if (process.env.SESSION_SECRET.trim().length < 32) {

@@ -6,7 +6,10 @@ const snowflakeSchema = z.string().regex(/^\d{17,20}$/);
 
 const baseEnvironmentSchema = z.object({
   NODE_ENV: nodeEnvironmentSchema,
-  DATABASE_URL: z.url().startsWith('postgresql://'),
+  DATABASE_URL: z.string().url().refine(
+    (url) => url.startsWith('postgresql://') || url.startsWith('postgres://'),
+    'DATABASE_URL must start with postgresql:// or postgres://',
+  ),
   LOG_LEVEL: logLevelSchema,
 });
 
