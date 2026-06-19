@@ -13,6 +13,13 @@ const LOCAL_HOSTS = new Set(['127.0.0.1', 'localhost']);
 const SHUTDOWN_SIGNALS = ['SIGINT', 'SIGTERM'];
 const SERVICE_START_TIMEOUT_MS = 30_000;
 const BOT_READY_TIMEOUT_MS = 90_000;
+const BIN_EXT = process.platform === 'win32' ? '.cmd' : '';
+
+function bin(...segments) {
+  const last = segments.length - 1;
+  segments[last] = segments[last] + BIN_EXT;
+  return path.join(ROOT, ...segments);
+}
 
 const serviceProcesses = [];
 let shuttingDown = false;
@@ -213,14 +220,14 @@ function validateEnvironment() {
 
 function assertRequiredBinaries() {
   const binaries = [
-    path.join(ROOT, 'packages', 'types', 'node_modules', '.bin', 'tsc.cmd'),
-    path.join(ROOT, 'packages', 'shared', 'node_modules', '.bin', 'tsc.cmd'),
-    path.join(ROOT, 'packages', 'database', 'node_modules', '.bin', 'drizzle-kit.cmd'),
-    path.join(ROOT, 'packages', 'database', 'node_modules', '.bin', 'tsc.cmd'),
-    path.join(ROOT, 'packages', 'ui', 'node_modules', '.bin', 'tsc.cmd'),
-    path.join(ROOT, 'apps', 'api', 'node_modules', '.bin', 'tsc.cmd'),
-    path.join(ROOT, 'apps', 'bot', 'node_modules', '.bin', 'tsc.cmd'),
-    path.join(ROOT, 'apps', 'dashboard', 'node_modules', '.bin', 'tsc.cmd'),
+    bin('packages', 'types', 'node_modules', '.bin', 'tsc'),
+    bin('packages', 'shared', 'node_modules', '.bin', 'tsc'),
+    bin('packages', 'database', 'node_modules', '.bin', 'drizzle-kit'),
+    bin('packages', 'database', 'node_modules', '.bin', 'tsc'),
+    bin('packages', 'ui', 'node_modules', '.bin', 'tsc'),
+    bin('apps', 'api', 'node_modules', '.bin', 'tsc'),
+    bin('apps', 'bot', 'node_modules', '.bin', 'tsc'),
+    bin('apps', 'dashboard', 'node_modules', '.bin', 'tsc'),
     path.join(ROOT, 'apps', 'dashboard', 'node_modules', 'vite', 'bin', 'vite.js'),
   ];
 
@@ -278,7 +285,7 @@ async function runDatabaseMigrations() {
   await runCommand({
     name: 'migrate',
     cwd: path.join(ROOT, 'packages', 'database'),
-    command: path.join(ROOT, 'packages', 'database', 'node_modules', '.bin', 'drizzle-kit.cmd'),
+    command: bin('packages', 'database', 'node_modules', '.bin', 'drizzle-kit'),
     args: ['migrate'],
   });
   logger.ok('Database migrations are up to date');
@@ -298,7 +305,7 @@ async function buildRuntimeServices() {
     await runCommand({
       name: `build-${name}`,
       cwd,
-      command: path.join(cwd, 'node_modules', '.bin', 'tsc.cmd'),
+      command: bin(...segments, 'node_modules', '.bin', 'tsc'),
       args: ['-p', config],
     });
   }
@@ -307,7 +314,7 @@ async function buildRuntimeServices() {
   await runCommand({
     name: 'build-api',
     cwd: path.join(ROOT, 'apps', 'api'),
-    command: path.join(ROOT, 'apps', 'api', 'node_modules', '.bin', 'tsc.cmd'),
+    command: bin('apps', 'api', 'node_modules', '.bin', 'tsc'),
     args: ['-p', 'tsconfig.build.json'],
   });
 
@@ -315,7 +322,7 @@ async function buildRuntimeServices() {
   await runCommand({
     name: 'build-bot',
     cwd: path.join(ROOT, 'apps', 'bot'),
-    command: path.join(ROOT, 'apps', 'bot', 'node_modules', '.bin', 'tsc.cmd'),
+    command: bin('apps', 'bot', 'node_modules', '.bin', 'tsc'),
     args: ['-p', 'tsconfig.build.json'],
   });
 
@@ -323,7 +330,7 @@ async function buildRuntimeServices() {
   await runCommand({
     name: 'typecheck-dashboard',
     cwd: path.join(ROOT, 'apps', 'dashboard'),
-    command: path.join(ROOT, 'apps', 'dashboard', 'node_modules', '.bin', 'tsc.cmd'),
+    command: bin('apps', 'dashboard', 'node_modules', '.bin', 'tsc'),
     args: ['-p', 'tsconfig.json', '--noEmit'],
   });
 
