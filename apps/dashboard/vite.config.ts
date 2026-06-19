@@ -1,6 +1,9 @@
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
-import { defineConfig } from 'vite';
+import { defineConfig, type ViteDevServer } from 'vite';
+import { readFileSync } from 'node:fs';
+import { extname, join } from 'node:path';
+import type { IncomingMessage, ServerResponse } from 'node:http';
 
 export default defineConfig(() => {
   const apiInternalPort = Number(process.env.API_INTERNAL_PORT || process.env.API_PORT || 4000);
@@ -12,6 +15,10 @@ export default defineConfig(() => {
   if (isLocalDev) {
     plugins.unshift(react());
   }
+
+  const root = process.cwd();
+  const indexPath = join(root, 'index.html');
+  const indexHtml = readFileSync(indexPath, 'utf-8');
 
   return {
     plugins,
@@ -26,6 +33,17 @@ export default defineConfig(() => {
           changeOrigin: true,
         },
       },
+    },
+    configureServer(server: ViteDevServer) {
+      server.middlewares.use((req: IncomingMessage, res: ServerResponse, next: () => void) => {
+        if (!req.url) return next();
+        if (req.url.startsWith('/api')) return next();
+        const ext = extname(req.url);
+        if (ext && ext !== '.html') return next();
+        res.statusCode = 200;
+        res.setHeader('Content-Type', 'text/html');
+        res.end(indexHtml);
+      });
     },
     build: {
       target: 'es2022',
