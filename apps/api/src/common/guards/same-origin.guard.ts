@@ -17,7 +17,8 @@ export class SameOriginGuard implements CanActivate {
   canActivate(context: ExecutionContext): boolean {
     const request = context.switchToHttp().getRequest<Request>();
     const origin = request.header('origin');
-    if (origin !== this.environment.DASHBOARD_URL) {
+    const dashboardUrl = this.environment.DASHBOARD_URL.replace(/\/+$/u, '');
+    if (origin !== dashboardUrl) {
       throw new ForbiddenException('The request origin is not allowed.');
     }
     return true;
