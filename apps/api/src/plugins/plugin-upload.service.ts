@@ -2,6 +2,7 @@ import {
   BadRequestException,
   HttpStatus,
   Injectable,
+  Logger,
 } from '@nestjs/common';
 import AdmZip from 'adm-zip';
 import { copyFile, mkdir, readdir, readFile, rm, stat } from 'node:fs/promises';
@@ -48,6 +49,8 @@ interface MulterFile {
 
 @Injectable()
 export class PluginUploadService {
+  private readonly logger = new Logger(PluginUploadService.name);
+
   constructor(
     private readonly pluginDiscoveryService: PluginDiscoveryService,
     private readonly pluginManager: PluginManager,
@@ -75,10 +78,14 @@ export class PluginUploadService {
       await this.validateDashboardContent(sourceDir, manifest);
       const targetDir = this.getInstalledPluginDirectory(manifest.id);
 
+      this.logger.log({ pluginId: manifest.id, sourceDir, targetDir }, 'Installing plugin files');
       await this.ensureSafeInstall(targetDir, manifest);
       await this.copyPluginFiles(sourceDir, targetDir);
+      const installedFiles = await this.listFiles(targetDir);
+      this.logger.log({ pluginId: manifest.id, targetDir, fileCount: installedFiles.length, files: installedFiles }, 'Plugin files copied');
       await this.registerPlugin(manifest, guildId);
       await this.pluginMigrationService.apply([manifest]);
+      this.logger.log({ pluginId: manifest.id }, 'Reloading plugin manifests after upload');
       await this.pluginManager.reloadManifests();
 
       return manifest;
@@ -358,5 +365,26 @@ export class PluginUploadService {
 
   private getInstalledPluginDirectory(pluginId: string): string {
     return this.pluginDiscoveryService.getInstalledPluginDirectory(pluginId);
+  }
+
+  private async listFiles(dir: string): Promise<string[]> {
+    const walk = async (root: string): Promise<string[]> => {
+      const entries = await readdir(root, { withFileTypes: true });
+      const paths: string[] = [];
+      for (const entry of entries) {
+        const fullPath = join(root, entry.name);
+        if (entry.isDirectory()) {
+          paths.push(...(await walk(fullPath)));
+        } else {
+          paths.push(fullPath.slice(dir.length + 1));
+        }
+      }
+      return paths;
+    };
+    try {
+      return await walk(dir);
+    } catch {
+      return [];
+    }
   }
 }
