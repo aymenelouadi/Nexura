@@ -2,6 +2,7 @@ import {
   BadRequestException,
   HttpStatus,
   Injectable,
+  Logger,
 } from '@nestjs/common';
 import AdmZip from 'adm-zip';
 import { copyFile, mkdir, readdir, readFile, rm, stat } from 'node:fs/promises';
@@ -49,6 +50,8 @@ interface MulterFile {
 
 @Injectable()
 export class PluginUploadService {
+  private readonly logger = new Logger(PluginUploadService.name);
+
   constructor(
     private readonly pluginDiscoveryService: PluginDiscoveryService,
     private readonly pluginManager: PluginManager,
@@ -70,8 +73,8 @@ export class PluginUploadService {
     const tempDir = join(dirname(file.path), `extract-${Date.now()}`);
     try {
       await this.extractArchive(file.path, tempDir);
+      await this.validateFileTree(tempDir);
       const sourceDir = await this.findPluginRoot(tempDir);
-      await this.validateFileTree(sourceDir);
 
       const manifest = await this.readAndValidateManifest(sourceDir);
       await this.validateDashboardContent(sourceDir, manifest);
@@ -118,7 +121,7 @@ export class PluginUploadService {
       for (const entry of entries) {
         if (entry.isDirectory) continue;
 
-        if (entry.entryName.includes('..') || entry.entryName.startsWith('/')) {
+        if (isUnsafeArchiveEntry(entry.entryName)) {
           throw new BadRequestException('Plugin archive contains unsafe file paths.');
         }
 
@@ -139,22 +142,33 @@ export class PluginUploadService {
   }
 
   private async findPluginRoot(tempDir: string): Promise<string> {
-    const entries = await readdir(tempDir, { withFileTypes: true });
-    const topLevelFolder = entries.find((entry) => entry.isDirectory());
+    const manifests = await this.findFilesNamed(tempDir, 'plugin.json');
 
-    if (entries.some((entry) => entry.name === 'plugin.json')) {
-      return tempDir;
+    if (manifests.length === 1) {
+      return dirname(manifests[0]!);
     }
 
-    if (topLevelFolder) {
-      const nestedPath = join(tempDir, topLevelFolder.name);
-      const nestedEntries = await readdir(nestedPath);
-      if (nestedEntries.includes('plugin.json')) {
-        return nestedPath;
-      }
+    if (manifests.length > 1) {
+      throw new BadRequestException('Plugin archive contains multiple plugin.json manifests.');
     }
 
     throw new BadRequestException('Plugin archive is missing plugin.json manifest.');
+  }
+
+  private async findFilesNamed(root: string, filename: string): Promise<string[]> {
+    const entries = await readdir(root, { withFileTypes: true });
+    const matches: string[] = [];
+
+    for (const entry of entries) {
+      const fullPath = join(root, entry.name);
+      if (entry.isDirectory()) {
+        matches.push(...(await this.findFilesNamed(fullPath, filename)));
+      } else if (entry.name === filename) {
+        matches.push(fullPath);
+      }
+    }
+
+    return matches;
   }
 
   private async validateFileTree(sourceDir: string): Promise<void> {
@@ -289,6 +303,16 @@ export class PluginUploadService {
       raw = await readFile(schemaPath, 'utf8');
     } catch (error) {
       if (isMissingFile(error)) {
+        const detectedFiles = await this.listFiles(sourceDir);
+        this.logger.warn(
+          {
+            pluginId: manifest.id,
+            normalizedRoot: sourceDir,
+            detectedFiles,
+            expectedDashboardSchemaPaths: ['dashboard.schema.json'],
+          },
+          'Plugin dashboard schema missing after package root normalization',
+        );
         throw new PluginOperationException(
           'PLUGIN_DASHBOARD_MISSING',
           'This plugin package is incomplete. It declares a dashboard but does not include one.',
@@ -392,4 +416,18 @@ export class PluginUploadService {
 
 function isMissingFile(error: unknown): boolean {
   return error instanceof Error && 'code' in error && error.code === 'ENOENT';
+}
+
+function isUnsafeArchiveEntry(entryName: string): boolean {
+  const normalized = normalize(entryName);
+  return (
+    entryName.includes('..') ||
+    entryName.startsWith('/') ||
+    entryName.startsWith('\\') ||
+    /^[a-zA-Z]:[\\/]/u.test(entryName) ||
+    normalized.startsWith('..') ||
+    normalized.startsWith('/') ||
+    normalized.startsWith('\\') ||
+    /^[a-zA-Z]:[\\/]/u.test(normalized)
+  );
 }

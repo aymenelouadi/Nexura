@@ -110,6 +110,19 @@ async function createZipBuffer(files: Record<string, string>): Promise<Buffer> {
   return zip.toBuffer();
 }
 
+async function createZipBufferWithUnsafeEntry(entryName: string): Promise<Buffer> {
+  const zip = new AdmZip();
+  zip.addFile('plugin.json', Buffer.from(JSON.stringify(validManifest), 'utf8'));
+  zip.addFile('index.js', Buffer.from('module.exports = {};', 'utf8'));
+  zip.addFile('unsafe-entry', Buffer.from(JSON.stringify(validDashboardSchema), 'utf8'));
+  const entry = zip.getEntry('unsafe-entry');
+  if (!entry) {
+    throw new Error('Failed to create unsafe test entry.');
+  }
+  entry.entryName = entryName;
+  return zip.toBuffer();
+}
+
 async function createTempFile(content: Buffer): Promise<{ filePath: string; dir: string }> {
   const tempDir = await mkdtemp(join(tmpdir(), 'nexura-upload-'));
   const filePath = join(tempDir, 'plugin.nexura');
@@ -229,6 +242,78 @@ describe('PluginUploadService', () => {
         size: zip.length,
         destination: '',
         filename: 'plugin.codenexus',
+        path: filePath,
+        buffer: zip,
+      },
+      '1111111111111111111',
+    );
+
+    expect(result.id).toBe('test-plugin');
+  });
+
+  it('uploads a dashboard-capable plugin from a single root folder', async () => {
+    const zip = await createZipBuffer({
+      'welcome/plugin.json': JSON.stringify(dashboardManifest),
+      'welcome/dashboard.schema.json': JSON.stringify(validDashboardSchema),
+      'welcome/index.js': 'module.exports = {};',
+    });
+    const { filePath, dir } = await createTempFile(zip);
+    tempPaths.push(dir);
+
+    const deps = createMockDeps();
+    const service = new PluginUploadService(
+      deps.pluginDiscoveryService,
+      deps.pluginManager,
+      deps.pluginRepository,
+      deps.pluginMigrationService,
+      deps.officialPluginRegistry,
+    );
+
+    const result = await service.upload(
+      {
+        fieldname: 'file',
+        originalname: 'test-plugin.nexura',
+        encoding: '7bit',
+        mimetype: 'application/octet-stream',
+        size: zip.length,
+        destination: '',
+        filename: 'plugin.nexura',
+        path: filePath,
+        buffer: zip,
+      },
+      '1111111111111111111',
+    );
+
+    expect(result.id).toBe('test-plugin');
+  });
+
+  it('uploads a dashboard-capable plugin from a nested plugins folder', async () => {
+    const zip = await createZipBuffer({
+      'plugins/welcome/plugin.json': JSON.stringify(dashboardManifest),
+      'plugins/welcome/dashboard.schema.json': JSON.stringify(validDashboardSchema),
+      'plugins/welcome/index.js': 'module.exports = {};',
+    });
+    const { filePath, dir } = await createTempFile(zip);
+    tempPaths.push(dir);
+
+    const deps = createMockDeps();
+    const service = new PluginUploadService(
+      deps.pluginDiscoveryService,
+      deps.pluginManager,
+      deps.pluginRepository,
+      deps.pluginMigrationService,
+      deps.officialPluginRegistry,
+    );
+
+    const result = await service.upload(
+      {
+        fieldname: 'file',
+        originalname: 'test-plugin.nexura',
+        encoding: '7bit',
+        mimetype: 'application/octet-stream',
+        size: zip.length,
+        destination: '',
+        filename: 'plugin.nexura',
         path: filePath,
         buffer: zip,
       },
@@ -378,6 +463,70 @@ describe('PluginUploadService', () => {
         '1111111111111111111',
       ),
     ).rejects.toThrow('missing plugin.json');
+  });
+
+  it('rejects archives containing path traversal entries', async () => {
+    const zip = await createZipBufferWithUnsafeEntry('../dashboard.schema.json');
+    const { filePath, dir } = await createTempFile(zip);
+    tempPaths.push(dir);
+
+    const deps = createMockDeps();
+    const service = new PluginUploadService(
+      deps.pluginDiscoveryService,
+      deps.pluginManager,
+      deps.pluginRepository,
+      deps.pluginMigrationService,
+      deps.officialPluginRegistry,
+    );
+
+    await expect(
+      service.upload(
+        {
+          fieldname: 'file',
+          originalname: 'plugin.nexura',
+          encoding: '7bit',
+          mimetype: 'application/octet-stream',
+          size: zip.length,
+          destination: '',
+          filename: 'plugin.nexura',
+          path: filePath,
+          buffer: zip,
+        },
+        '1111111111111111111',
+      ),
+    ).rejects.toThrow('unsafe file paths');
+  });
+
+  it('rejects archives containing absolute paths', async () => {
+    const zip = await createZipBufferWithUnsafeEntry('/dashboard.schema.json');
+    const { filePath, dir } = await createTempFile(zip);
+    tempPaths.push(dir);
+
+    const deps = createMockDeps();
+    const service = new PluginUploadService(
+      deps.pluginDiscoveryService,
+      deps.pluginManager,
+      deps.pluginRepository,
+      deps.pluginMigrationService,
+      deps.officialPluginRegistry,
+    );
+
+    await expect(
+      service.upload(
+        {
+          fieldname: 'file',
+          originalname: 'plugin.nexura',
+          encoding: '7bit',
+          mimetype: 'application/octet-stream',
+          size: zip.length,
+          destination: '',
+          filename: 'plugin.nexura',
+          path: filePath,
+          buffer: zip,
+        },
+        '1111111111111111111',
+      ),
+    ).rejects.toThrow('unsafe file paths');
   });
 
   it('rejects archives containing executables', async () => {

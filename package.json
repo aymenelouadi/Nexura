@@ -22,7 +22,8 @@
     "update:nexura": "node update.js",
     "db:generate": "pnpm --filter @nexura/database db:generate",
     "db:migrate": "pnpm --filter @nexura/database db:migrate",
-    "db:studio": "pnpm --filter @nexura/database db:studio"
+    "db:studio": "pnpm --filter @nexura/database db:studio",
+    "plugin:inspect": "node scripts/inspect-plugin.js"
   },
   "dependencies": {
     "adm-zip": "0.5.16",
