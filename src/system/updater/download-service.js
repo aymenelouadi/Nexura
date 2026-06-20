@@ -61,10 +61,16 @@ class DownloadService {
   }
 
   /**
-   * @param {object[]} assets
+   * @param {object} release
    * @returns {object}
    */
-  pickAsset(assets) {
+  pickAsset(release) {
+    const assets = Array.isArray(release?.assets) ? release.assets : [];
+
+    if (assets.length === 0 && release?.zipballUrl) {
+      return { name: `${release.tagName || 'source'}.zip`, url: release.zipballUrl, size: 0 };
+    }
+
     if (assets.length === 0) {
       throw new Error('Release has no downloadable assets');
     }
