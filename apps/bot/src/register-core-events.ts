@@ -20,12 +20,8 @@ export function registerCoreEvents(client: Client, guildStore: GuildStore, logge
   });
 
   client.on('guildDelete', (guild) => {
-    void guildStore
-      .markAbsent(guild.id)
-      .then(() => logger.info({ guildId: guild.id, guildName: guild.name }, 'Bot left a guild'))
-      .catch((error: unknown) => {
-        logger.error({ error, guildId: guild.id }, 'Guild sync failed');
-      });
+    guildStore.markAbsent(guild.id);
+    logger.info({ guildId: guild.id, guildName: guild.name }, 'Bot left a guild');
   });
 
   client.on('error', (error) => {

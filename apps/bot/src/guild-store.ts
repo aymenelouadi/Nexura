@@ -2,10 +2,20 @@ import { guildMembers, guilds, users, type Database } from '@nexura/database';
 import type { Guild } from 'discord.js';
 import { eq } from 'drizzle-orm';
 
+const ABSENT_DEBOUNCE_MS = 5_000;
+
 export class GuildStore {
+  private readonly pendingAbsent = new Map<string, ReturnType<typeof setTimeout>>();
+
   constructor(private readonly database: Database) {}
 
   async markPresent(guild: Guild): Promise<void> {
+    const timeout = this.pendingAbsent.get(guild.id);
+    if (timeout) {
+      clearTimeout(timeout);
+      this.pendingAbsent.delete(guild.id);
+    }
+
     await this.database
       .insert(guilds)
       .values({
@@ -29,11 +39,17 @@ export class GuildStore {
     await this.synchronizeKnownOwner(guild);
   }
 
-  async markAbsent(guildId: string): Promise<void> {
-    await this.database
-      .update(guilds)
-      .set({ botPresent: false, updatedAt: new Date() })
-      .where(eq(guilds.id, guildId));
+  markAbsent(guildId: string): void {
+    this.pendingAbsent.set(
+      guildId,
+      setTimeout(async () => {
+        this.pendingAbsent.delete(guildId);
+        await this.database
+          .update(guilds)
+          .set({ botPresent: false, updatedAt: new Date() })
+          .where(eq(guilds.id, guildId));
+      }, ABSENT_DEBOUNCE_MS),
+    );
   }
 
   private async synchronizeKnownOwner(guild: Guild): Promise<void> {
