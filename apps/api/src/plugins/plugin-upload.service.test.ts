@@ -11,6 +11,7 @@ import type { PluginDiscoveryService } from './plugin-discovery.service.js';
 import type { PluginManager } from './plugin-manager.service.js';
 import type { PluginMigrationService } from './plugin-migration.service.js';
 import type { PluginRepository } from './plugin.repository.js';
+import type { OfficialPluginRegistry } from './official-plugin.registry.js';
 import type { PluginManifest } from '@nexura/types';
 
 const validManifest: PluginManifest = {
@@ -90,6 +91,15 @@ function createMockDeps(overrides?: {
     pluginMigrationService: {
       apply: vi.fn().mockResolvedValue(undefined),
     } as unknown as PluginMigrationService,
+    officialPluginRegistry: {
+      isOfficial: vi.fn().mockReturnValue(false),
+      getById: vi.fn().mockReturnValue(undefined),
+      hasDashboardFallback: vi.fn().mockReturnValue(false),
+      getDashboardMode: vi.fn().mockReturnValue('none'),
+      getDashboardSchema: vi.fn().mockResolvedValue(null),
+      isSupported: vi.fn().mockReturnValue(true),
+      getExpectedManifestId: vi.fn().mockReturnValue(undefined),
+    } as unknown as OfficialPluginRegistry,
   };
 }
 
@@ -135,6 +145,7 @@ describe('PluginUploadService', () => {
       deps.pluginManager,
       deps.pluginRepository,
       deps.pluginMigrationService,
+      deps.officialPluginRegistry,
     );
 
     const result = await service.upload(
@@ -172,6 +183,7 @@ describe('PluginUploadService', () => {
       deps.pluginManager,
       deps.pluginRepository,
       deps.pluginMigrationService,
+      deps.officialPluginRegistry,
     );
 
     const result = await service.upload(
@@ -206,6 +218,7 @@ describe('PluginUploadService', () => {
       deps.pluginManager,
       deps.pluginRepository,
       deps.pluginMigrationService,
+      deps.officialPluginRegistry,
     );
 
     const result = await service.upload(
@@ -240,6 +253,7 @@ describe('PluginUploadService', () => {
       deps.pluginManager,
       deps.pluginRepository,
       deps.pluginMigrationService,
+      deps.officialPluginRegistry,
     );
 
     await expect(
@@ -261,7 +275,7 @@ describe('PluginUploadService', () => {
       response: {
         error: {
           code: 'PLUGIN_DASHBOARD_MISSING',
-          message: 'This plugin says it has a dashboard, but no dashboard interface was included. Please upload a complete plugin package.',
+          message: 'This plugin package is incomplete. It declares a dashboard but does not include one.',
         },
       },
     });
@@ -282,6 +296,7 @@ describe('PluginUploadService', () => {
       deps.pluginManager,
       deps.pluginRepository,
       deps.pluginMigrationService,
+      deps.officialPluginRegistry,
     );
 
     const result = await service.upload(
@@ -313,6 +328,7 @@ describe('PluginUploadService', () => {
       deps.pluginManager,
       deps.pluginRepository,
       deps.pluginMigrationService,
+      deps.officialPluginRegistry,
     );
 
     await expect(
@@ -344,6 +360,7 @@ describe('PluginUploadService', () => {
       deps.pluginManager,
       deps.pluginRepository,
       deps.pluginMigrationService,
+      deps.officialPluginRegistry,
     );
 
     await expect(
@@ -379,6 +396,7 @@ describe('PluginUploadService', () => {
       deps.pluginManager,
       deps.pluginRepository,
       deps.pluginMigrationService,
+      deps.officialPluginRegistry,
     );
 
     await expect(
@@ -414,6 +432,7 @@ describe('PluginUploadService', () => {
       deps.pluginManager,
       deps.pluginRepository,
       deps.pluginMigrationService,
+      deps.officialPluginRegistry,
     );
 
     await expect(
@@ -451,6 +470,7 @@ describe('PluginUploadService', () => {
       deps.pluginManager,
       deps.pluginRepository,
       deps.pluginMigrationService,
+      deps.officialPluginRegistry,
     );
 
     await expect(
@@ -485,6 +505,7 @@ describe('PluginUploadService', () => {
       deps.pluginManager,
       deps.pluginRepository,
       deps.pluginMigrationService,
+      deps.officialPluginRegistry,
     );
 
     const result = await service.upload(
@@ -520,6 +541,7 @@ describe('PluginUploadService', () => {
       deps.pluginManager,
       deps.pluginRepository,
       deps.pluginMigrationService,
+      deps.officialPluginRegistry,
     );
 
     await expect(
@@ -555,6 +577,7 @@ describe('PluginUploadService', () => {
       deps.pluginManager,
       deps.pluginRepository,
       deps.pluginMigrationService,
+      deps.officialPluginRegistry,
     );
 
     await expect(
@@ -590,6 +613,7 @@ describe('PluginUploadService', () => {
       deps.pluginManager,
       deps.pluginRepository,
       deps.pluginMigrationService,
+      deps.officialPluginRegistry,
     );
 
     const result = await service.upload(
@@ -623,6 +647,7 @@ describe('PluginUploadService', () => {
       deps.pluginManager,
       deps.pluginRepository,
       deps.pluginMigrationService,
+      deps.officialPluginRegistry,
     );
 
     await expect(
@@ -684,6 +709,7 @@ describe('PluginUploadService', () => {
       deps.pluginManager,
       deps.pluginRepository,
       deps.pluginMigrationService,
+      deps.officialPluginRegistry,
     );
 
     const result = await service.upload(
@@ -706,7 +732,7 @@ describe('PluginUploadService', () => {
     expect(deps.pluginRepository.registerManifest).toHaveBeenCalled();
   });
 
-  it('accepts the official Welcome plugin without dashboard.schema.json when bundled dashboard exists', async () => {
+  it('accepts the official Welcome plugin without dashboard.schema.json using the official fallback', async () => {
     const welcomeManifest = {
       id: 'welcome',
       name: 'Welcome',
@@ -740,20 +766,16 @@ describe('PluginUploadService', () => {
     const { filePath, dir } = await createTempFile(zip);
     tempPaths.push(dir);
 
-    const bundledDir = await mkdtemp(join(tmpdir(), 'nexura-bundled-'));
-    tempPaths.push(bundledDir);
-    await writeFile(
-      join(bundledDir, 'dashboard.schema.json'),
-      JSON.stringify(validDashboardSchema),
-    );
-
     const deps = createMockDeps();
-    deps.pluginDiscoveryService.getBundledPluginDirectory = vi.fn().mockReturnValue(bundledDir);
+    deps.officialPluginRegistry.getDashboardSchema = vi.fn().mockResolvedValue(validDashboardSchema);
+    deps.officialPluginRegistry.hasDashboardFallback = vi.fn().mockReturnValue(true);
+    deps.officialPluginRegistry.isOfficial = vi.fn().mockReturnValue(true);
     const service = new PluginUploadService(
       deps.pluginDiscoveryService,
       deps.pluginManager,
       deps.pluginRepository,
       deps.pluginMigrationService,
+      deps.officialPluginRegistry,
     );
 
     const result = await service.upload(
@@ -772,6 +794,7 @@ describe('PluginUploadService', () => {
     );
 
     expect(result.id).toBe('welcome');
+    expect(deps.officialPluginRegistry.getDashboardSchema).toHaveBeenCalledWith('welcome');
     expect(deps.pluginRepository.registerManifest).toHaveBeenCalled();
   });
 
@@ -789,6 +812,7 @@ describe('PluginUploadService', () => {
       deps.pluginManager,
       deps.pluginRepository,
       deps.pluginMigrationService,
+      deps.officialPluginRegistry,
     );
 
     await expect(
@@ -828,6 +852,7 @@ describe('PluginUploadService', () => {
       deps.pluginManager,
       deps.pluginRepository,
       deps.pluginMigrationService,
+      deps.officialPluginRegistry,
     );
 
     const result = await service.upload(

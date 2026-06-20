@@ -4,12 +4,13 @@ import {
   Injectable,
 } from '@nestjs/common';
 import AdmZip from 'adm-zip';
-import { copyFile, mkdir, readdir, readFile, rm, stat } from 'node:fs/promises';
+import { copyFile, mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { dirname, join, normalize } from 'node:path';
-import type { PluginDashboardSchemaDocument, PluginManifest } from '@nexura/types';
+import type { PluginManifest } from '@nexura/types';
 import { pluginDashboardSchemaDocumentSchema } from '@nexura/types';
 import semver from 'semver';
 
+import { OfficialPluginRegistry } from './official-plugin.registry.js';
 import { PluginDiscoveryService } from './plugin-discovery.service.js';
 import { PluginManager } from './plugin-manager.service.js';
 import { PluginMigrationService } from './plugin-migration.service.js';
@@ -53,6 +54,7 @@ export class PluginUploadService {
     private readonly pluginManager: PluginManager,
     private readonly pluginRepository: PluginRepository,
     private readonly pluginMigrationService: PluginMigrationService,
+    private readonly officialPluginRegistry: OfficialPluginRegistry,
   ) {}
 
   async upload(file: MulterFile, guildId: string): Promise<PluginManifest> {
@@ -277,16 +279,18 @@ export class PluginUploadService {
     try {
       raw = await readFile(schemaPath, 'utf8');
     } catch (error) {
-      if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
-        const bundledSchema = await this.readBundledDashboardSchema(manifest.id);
-        if (bundledSchema) {
+      if (isMissingFile(error)) {
+        const fallbackSchema = await this.officialPluginRegistry.getDashboardSchema(manifest.id);
+        if (fallbackSchema) {
+          await this.writeDashboardSchema(schemaPath, fallbackSchema);
           return;
         }
+
         throw new PluginOperationException(
           'PLUGIN_DASHBOARD_MISSING',
-          'This plugin says it has a dashboard, but no dashboard interface was included. Please upload a complete plugin package.',
+          'This plugin package is incomplete. It declares a dashboard but does not include one.',
           HttpStatus.BAD_REQUEST,
-          { pluginId: manifest.id },
+          { pluginId: manifest.id, dashboardSchemaMissing: true },
         );
       }
       throw error;
@@ -304,14 +308,9 @@ export class PluginUploadService {
     }
   }
 
-  private async readBundledDashboardSchema(pluginId: string): Promise<PluginDashboardSchemaDocument | null> {
-    const schemaPath = join(this.pluginDiscoveryService.getBundledPluginDirectory(pluginId), 'dashboard.schema.json');
-    try {
-      const content = await readFile(schemaPath, 'utf8');
-      return pluginDashboardSchemaDocumentSchema.parse(JSON.parse(content));
-    } catch {
-      return null;
-    }
+  private async writeDashboardSchema(schemaPath: string, schema: unknown): Promise<void> {
+    await mkdir(dirname(schemaPath), { recursive: true });
+    await writeFile(schemaPath, JSON.stringify(schema, null, 2));
   }
 
   private async ensureSafeInstall(targetDir: string, manifest: PluginManifest): Promise<void> {
@@ -391,4 +390,8 @@ export class PluginUploadService {
       return [];
     }
   }
+}
+
+function isMissingFile(error: unknown): boolean {
+  return error instanceof Error && 'code' in error && error.code === 'ENOENT';
 }
