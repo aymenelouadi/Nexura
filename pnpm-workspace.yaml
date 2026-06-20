@@ -2,7 +2,6 @@ packages:
   - apps/*
   - packages/*
   - plugins/*
-  - plugins/installed/*
 
 allowBuilds:
   '@scarf/scarf': false

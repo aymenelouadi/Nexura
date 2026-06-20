@@ -13,7 +13,6 @@
   },
   "dependencies": {
     "@hookform/resolvers": "^5.4.0",
-    "@nexura/plugin-welcome": "workspace:*",
     "@nexura/types": "workspace:*",
     "@nexura/ui": "workspace:*",
     "@tanstack/react-query": "5.101.0",
