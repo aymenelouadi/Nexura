@@ -29,6 +29,7 @@ const PLUGINS_DIRECTORY = resolve(
   '..',
   'plugins',
 );
+const INSTALLED_PLUGINS_DIRECTORY = join(PLUGINS_DIRECTORY, 'installed');
 
 interface LoadedPlugin {
   manifest: PluginManifest;
@@ -90,6 +91,9 @@ export class PluginHost {
       const manifest = pluginManifestSchema.parse(
         JSON.parse(await readFile(join(directory, 'plugin.json'), 'utf8')) as unknown,
       );
+      if (this.loaded.has(manifest.id)) {
+        continue;
+      }
       const runtimePath = join(directory, 'dist', manifest.entry.replace(/\.ts$/u, '.js'));
       const imported = (await import(pathToFileURL(runtimePath).href)) as {
         default?: PluginModule;
@@ -107,6 +111,7 @@ export class PluginHost {
     if (this.refreshing) return;
     this.refreshing = true;
     try {
+      await this.loadModules();
       const enabled = await this.database
         .select({ guildId: guildPlugins.guildId, pluginId: guildPlugins.pluginId })
         .from(guildPlugins)
@@ -187,12 +192,17 @@ function toDiscordOptionType(type: 'STRING' | 'BOOLEAN' | 'INTEGER'): Applicatio
 }
 
 async function listPluginDirectories(): Promise<string[]> {
+  const officialDirectories = await listChildDirectories(PLUGINS_DIRECTORY, new Set(['installed']));
+  const installedDirectories = await listChildDirectories(INSTALLED_PLUGINS_DIRECTORY);
+  return [...new Set([...officialDirectories, ...installedDirectories])].sort();
+}
+
+async function listChildDirectories(root: string, exclude = new Set<string>()): Promise<string[]> {
   try {
-    const entries = await readdir(PLUGINS_DIRECTORY, { withFileTypes: true });
+    const entries = await readdir(root, { withFileTypes: true });
     return entries
-      .filter((entry) => entry.isDirectory())
-      .map((entry) => join(PLUGINS_DIRECTORY, entry.name))
-      .sort();
+      .filter((entry) => entry.isDirectory() && !exclude.has(entry.name))
+      .map((entry) => join(root, entry.name));
   } catch (error) {
     if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
       return [];
