@@ -3,7 +3,7 @@ import { existsSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { pluginManifestSchema, type PluginManifest } from '@nexura/types';
 
 export const CORE_VERSION = '0.2.5';
@@ -12,12 +12,8 @@ const INSTALLED_PLUGIN_DIRECTORY = join(PLUGIN_DIRECTORY, 'installed');
 
 @Injectable()
 export class PluginDiscoveryService {
-  private readonly logger = new Logger(PluginDiscoveryService.name);
-
   async discoverManifests(): Promise<PluginManifest[]> {
-    this.logger.log({ pluginDir: PLUGIN_DIRECTORY, installedDir: INSTALLED_PLUGIN_DIRECTORY }, 'Discovering plugin manifests');
     const pluginDirectories = await this.getPluginDirectories();
-    this.logger.log({ count: pluginDirectories.length, directories: pluginDirectories }, 'Plugin directories scanned');
     return Promise.all(pluginDirectories.map((directory) => this.readManifest(directory)));
   }
 

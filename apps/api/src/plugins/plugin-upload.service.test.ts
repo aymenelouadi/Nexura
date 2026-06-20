@@ -77,6 +77,7 @@ function createMockDeps(overrides?: {
       validateManifest: vi.fn((manifest: unknown) => manifest as PluginManifest),
       getInstalledPluginDirectory: vi.fn(() => pluginDir),
       getInstalledPluginsDirectory: vi.fn(() => tmpdir()),
+      getBundledPluginDirectory: vi.fn(() => tmpdir()),
     } as unknown as PluginDiscoveryService,
     pluginManager: {
       reloadManifests: vi.fn().mockResolvedValue(undefined),
@@ -702,6 +703,75 @@ describe('PluginUploadService', () => {
 
     expect(result.id).toBe('welcome');
     expect(result.dashboard?.enabled).toBe(true);
+    expect(deps.pluginRepository.registerManifest).toHaveBeenCalled();
+  });
+
+  it('accepts the official Welcome plugin without dashboard.schema.json when bundled dashboard exists', async () => {
+    const welcomeManifest = {
+      id: 'welcome',
+      name: 'Welcome',
+      description: 'Advanced welcome plugin',
+      version: '1.0.0',
+      author: 'Nexura',
+      minCoreVersion: '0.0.0',
+      entry: 'index.ts',
+      permissions: [],
+      capabilities: {
+        commands: true,
+        events: true,
+        dashboard: true,
+        database: true,
+        templates: true,
+        visualEditor: true,
+        logs: true,
+      },
+      dashboard: {
+        enabled: true,
+        route: '/plugins/welcome',
+        label: 'Welcome',
+        icon: 'Sparkles',
+        tabs: ['overview', 'welcome'],
+      },
+    };
+    const zip = await createZipBuffer({
+      'plugin.json': JSON.stringify(welcomeManifest),
+      'index.ts': 'export default {};',
+    });
+    const { filePath, dir } = await createTempFile(zip);
+    tempPaths.push(dir);
+
+    const bundledDir = await mkdtemp(join(tmpdir(), 'nexura-bundled-'));
+    tempPaths.push(bundledDir);
+    await writeFile(
+      join(bundledDir, 'dashboard.schema.json'),
+      JSON.stringify(validDashboardSchema),
+    );
+
+    const deps = createMockDeps();
+    deps.pluginDiscoveryService.getBundledPluginDirectory = vi.fn().mockReturnValue(bundledDir);
+    const service = new PluginUploadService(
+      deps.pluginDiscoveryService,
+      deps.pluginManager,
+      deps.pluginRepository,
+      deps.pluginMigrationService,
+    );
+
+    const result = await service.upload(
+      {
+        fieldname: 'file',
+        originalname: 'welcome.nexura',
+        encoding: '7bit',
+        mimetype: 'application/octet-stream',
+        size: zip.length,
+        destination: '',
+        filename: 'welcome.nexura',
+        path: filePath,
+        buffer: zip,
+      },
+      '1111111111111111111',
+    );
+
+    expect(result.id).toBe('welcome');
     expect(deps.pluginRepository.registerManifest).toHaveBeenCalled();
   });
 

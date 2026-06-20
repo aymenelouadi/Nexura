@@ -2,12 +2,11 @@ import {
   BadRequestException,
   HttpStatus,
   Injectable,
-  Logger,
 } from '@nestjs/common';
 import AdmZip from 'adm-zip';
 import { copyFile, mkdir, readdir, readFile, rm, stat } from 'node:fs/promises';
 import { dirname, join, normalize } from 'node:path';
-import type { PluginManifest } from '@nexura/types';
+import type { PluginDashboardSchemaDocument, PluginManifest } from '@nexura/types';
 import { pluginDashboardSchemaDocumentSchema } from '@nexura/types';
 import semver from 'semver';
 
@@ -49,8 +48,6 @@ interface MulterFile {
 
 @Injectable()
 export class PluginUploadService {
-  private readonly logger = new Logger(PluginUploadService.name);
-
   constructor(
     private readonly pluginDiscoveryService: PluginDiscoveryService,
     private readonly pluginManager: PluginManager,
@@ -59,7 +56,6 @@ export class PluginUploadService {
   ) {}
 
   async upload(file: MulterFile, guildId: string): Promise<PluginManifest> {
-    this.logger.log({ hasFile: Boolean(file), hasPath: Boolean(file?.path), originalname: file?.originalname, guildId }, 'Plugin upload request received');
     if (!file?.path) {
       throw new PluginOperationException(
         'PLUGIN_UPLOAD_FILE_MISSING',
@@ -79,17 +75,12 @@ export class PluginUploadService {
       await this.validateDashboardContent(sourceDir, manifest);
       const targetDir = this.getInstalledPluginDirectory(manifest.id);
 
-      this.logger.log({ pluginId: manifest.id, sourceDir, targetDir }, 'Installing plugin files');
       await this.ensureSafeInstall(targetDir, manifest);
       await this.copyPluginFiles(sourceDir, targetDir);
-      const installedFiles = await this.listFiles(targetDir);
-      this.logger.log({ pluginId: manifest.id, targetDir, fileCount: installedFiles.length, files: installedFiles }, 'Plugin files copied');
       await this.registerPlugin(manifest, guildId);
       await this.pluginMigrationService.apply([manifest]);
-      this.logger.log({ pluginId: manifest.id }, 'Reloading plugin manifests after upload');
       await this.pluginManager.reloadManifests();
 
-      this.logger.log({ pluginId: manifest.id, targetDir }, 'Plugin upload completed successfully');
       return manifest;
     } finally {
       await rm(tempDir, { recursive: true, force: true }).catch(() => {});
@@ -287,6 +278,10 @@ export class PluginUploadService {
       raw = await readFile(schemaPath, 'utf8');
     } catch (error) {
       if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
+        const bundledSchema = await this.readBundledDashboardSchema(manifest.id);
+        if (bundledSchema) {
+          return;
+        }
         throw new PluginOperationException(
           'PLUGIN_DASHBOARD_MISSING',
           'This plugin says it has a dashboard, but no dashboard interface was included. Please upload a complete plugin package.',
@@ -306,6 +301,16 @@ export class PluginUploadService {
         HttpStatus.BAD_REQUEST,
         { pluginId: manifest.id, reason: error instanceof Error ? error.message : 'Unknown schema error.' },
       );
+    }
+  }
+
+  private async readBundledDashboardSchema(pluginId: string): Promise<PluginDashboardSchemaDocument | null> {
+    const schemaPath = join(this.pluginDiscoveryService.getBundledPluginDirectory(pluginId), 'dashboard.schema.json');
+    try {
+      const content = await readFile(schemaPath, 'utf8');
+      return pluginDashboardSchemaDocumentSchema.parse(JSON.parse(content));
+    } catch {
+      return null;
     }
   }
 
