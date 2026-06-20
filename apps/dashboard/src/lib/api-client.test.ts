@@ -30,6 +30,35 @@ describe('api-client', () => {
     );
   });
 
+  it('surfaces friendly PLUGIN_DASHBOARD_MISSING upload errors', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 400,
+        headers: { get: () => 'request-2' },
+        url: '/api/v1/guilds/1111111111111111111/plugins/upload',
+        json: () => ({
+          type: 'about:blank',
+          title: 'Bad Request',
+          status: 400,
+          detail: 'This plugin says it has a dashboard, but no dashboard interface was included. Please upload a complete plugin package.',
+          instance: '/api/v1/guilds/1111111111111111111/plugins/upload',
+          requestId: 'request-2',
+          error: {
+            code: 'PLUGIN_DASHBOARD_MISSING',
+            message: 'This plugin says it has a dashboard, but no dashboard interface was included. Please upload a complete plugin package.',
+            details: { pluginId: 'welcome' },
+          },
+        }),
+      }),
+    );
+
+    await expect(api.uploadGuildPlugin('1111111111111111111', new File(['x'], 'welcome.nexura'))).rejects.toThrow(
+      'This plugin says it has a dashboard, but no dashboard interface was included. Please upload a complete plugin package.',
+    );
+  });
+
   it('uses structured backend plugin error messages', async () => {
     vi.stubGlobal(
       'fetch',

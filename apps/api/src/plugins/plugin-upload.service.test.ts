@@ -225,9 +225,51 @@ describe('PluginUploadService', () => {
     expect(result.id).toBe('test-plugin');
   });
 
-  it('uploads dashboard-enabled plugins without dashboard.schema.json so Core can generate a dashboard', async () => {
+  it('rejects dashboard-enabled plugins without dashboard.schema.json', async () => {
     const zip = await createZipBuffer({
       'plugin.json': JSON.stringify(dashboardManifest),
+      'index.js': 'module.exports = {};',
+    });
+    const { filePath, dir } = await createTempFile(zip);
+    tempPaths.push(dir);
+
+    const deps = createMockDeps();
+    const service = new PluginUploadService(
+      deps.pluginDiscoveryService,
+      deps.pluginManager,
+      deps.pluginRepository,
+      deps.pluginMigrationService,
+    );
+
+    await expect(
+      service.upload(
+        {
+          fieldname: 'file',
+          originalname: 'plugin.nexura',
+          encoding: '7bit',
+          mimetype: 'application/octet-stream',
+          size: zip.length,
+          destination: '',
+          filename: 'plugin.nexura',
+          path: filePath,
+          buffer: zip,
+        },
+        '1111111111111111111',
+      ),
+    ).rejects.toMatchObject({
+      response: {
+        error: {
+          code: 'PLUGIN_DASHBOARD_MISSING',
+          message: 'This plugin says it has a dashboard, but no dashboard interface was included. Please upload a complete plugin package.',
+        },
+      },
+    });
+    expect(deps.pluginRepository.registerManifest).not.toHaveBeenCalled();
+  });
+
+  it('accepts plugins without dashboard.schema.json when dashboard is disabled', async () => {
+    const zip = await createZipBuffer({
+      'plugin.json': JSON.stringify(validManifest),
       'index.js': 'module.exports = {};',
     });
     const { filePath, dir } = await createTempFile(zip);
@@ -256,7 +298,7 @@ describe('PluginUploadService', () => {
       '1111111111111111111',
     );
 
-    expect(result.dashboard?.enabled).toBe(true);
+    expect(result.dashboard).toBeUndefined();
     expect(deps.pluginRepository.registerManifest).toHaveBeenCalled();
   });
 
@@ -598,6 +640,106 @@ describe('PluginUploadService', () => {
         '1111111111111111111',
       ),
     ).rejects.toThrow('Plugin entry "index.js" was not found');
+  });
+
+  it('accepts the official Welcome plugin when dashboard.schema.json is included', async () => {
+    const welcomeManifest = {
+      id: 'welcome',
+      name: 'Welcome',
+      description: 'Advanced welcome plugin',
+      version: '1.0.0',
+      author: 'Nexura',
+      minCoreVersion: '0.0.0',
+      entry: 'index.ts',
+      permissions: [],
+      capabilities: {
+        commands: true,
+        events: true,
+        dashboard: true,
+        database: true,
+        templates: true,
+        visualEditor: true,
+        logs: true,
+      },
+      dashboard: {
+        enabled: true,
+        route: '/plugins/welcome',
+        label: 'Welcome',
+        icon: 'Sparkles',
+        tabs: ['overview', 'welcome'],
+      },
+    };
+    const zip = await createZipBuffer({
+      'plugin.json': JSON.stringify(welcomeManifest),
+      'dashboard.schema.json': JSON.stringify(validDashboardSchema),
+      'index.ts': 'export default {};',
+    });
+    const { filePath, dir } = await createTempFile(zip);
+    tempPaths.push(dir);
+
+    const deps = createMockDeps();
+    const service = new PluginUploadService(
+      deps.pluginDiscoveryService,
+      deps.pluginManager,
+      deps.pluginRepository,
+      deps.pluginMigrationService,
+    );
+
+    const result = await service.upload(
+      {
+        fieldname: 'file',
+        originalname: 'welcome.nexura',
+        encoding: '7bit',
+        mimetype: 'application/octet-stream',
+        size: zip.length,
+        destination: '',
+        filename: 'welcome.nexura',
+        path: filePath,
+        buffer: zip,
+      },
+      '1111111111111111111',
+    );
+
+    expect(result.id).toBe('welcome');
+    expect(result.dashboard?.enabled).toBe(true);
+    expect(deps.pluginRepository.registerManifest).toHaveBeenCalled();
+  });
+
+  it('does not register a plugin when validation fails', async () => {
+    const zip = await createZipBuffer({
+      'plugin.json': JSON.stringify(dashboardManifest),
+      'index.js': 'module.exports = {};',
+    });
+    const { filePath, dir } = await createTempFile(zip);
+    tempPaths.push(dir);
+
+    const deps = createMockDeps();
+    const service = new PluginUploadService(
+      deps.pluginDiscoveryService,
+      deps.pluginManager,
+      deps.pluginRepository,
+      deps.pluginMigrationService,
+    );
+
+    await expect(
+      service.upload(
+        {
+          fieldname: 'file',
+          originalname: 'plugin.nexura',
+          encoding: '7bit',
+          mimetype: 'application/octet-stream',
+          size: zip.length,
+          destination: '',
+          filename: 'plugin.nexura',
+          path: filePath,
+          buffer: zip,
+        },
+        '1111111111111111111',
+      ),
+    ).rejects.toBeDefined();
+
+    expect(deps.pluginRepository.registerManifest).not.toHaveBeenCalled();
+    expect(deps.pluginMigrationService.apply).not.toHaveBeenCalled();
   });
 
   it('accepts a TypeScript plugin when dist/ contains the compiled JS entry', async () => {

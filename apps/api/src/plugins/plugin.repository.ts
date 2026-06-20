@@ -40,9 +40,17 @@ export class PluginRepository {
           description: manifest.description,
           author: manifest.author,
           status: 'INSTALLED',
+          brokenReason: null,
           updatedAt: new Date(),
         },
       });
+  }
+
+  async markBroken(pluginId: string, reason: string): Promise<void> {
+    await this.database
+      .update(plugins)
+      .set({ status: 'BROKEN', brokenReason: reason, updatedAt: new Date() })
+      .where(eq(plugins.id, pluginId));
   }
 
   async removeMissingPlugins(pluginIds: string[]): Promise<void> {
@@ -210,6 +218,7 @@ function toGuildPlugin(row: {
     description: row.plugin.description,
     author: row.plugin.author,
     status: row.plugin.status,
+    brokenReason: row.plugin.brokenReason,
     enabled,
     guildStatus: enabled ? 'ENABLED' : 'DISABLED',
     installedAt: row.guildInstalledAt.toISOString(),

@@ -114,7 +114,7 @@ export const pluginManifestSchema = z
     }
   });
 
-export const pluginStatusSchema = z.enum(['INSTALLED', 'ERROR']);
+export const pluginStatusSchema = z.enum(['INSTALLED', 'ERROR', 'BROKEN']);
 export const guildPluginStatusSchema = z.enum(['ENABLED', 'DISABLED']);
 export const pluginLogLevelSchema = z.enum(['DEBUG', 'INFO', 'WARN', 'ERROR', 'AUDIT']);
 
@@ -125,6 +125,7 @@ export const guildPluginSchema = z.object({
   description: z.string(),
   author: z.string(),
   status: pluginStatusSchema,
+  brokenReason: z.string().max(255).nullable(),
   enabled: z.boolean(),
   guildStatus: guildPluginStatusSchema,
   installedAt: z.iso.datetime().nullable(),

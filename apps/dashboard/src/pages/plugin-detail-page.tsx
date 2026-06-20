@@ -1,5 +1,6 @@
 import {
   Badge,
+  Button,
   Card,
   CardContent,
   CardHeader,
@@ -10,22 +11,27 @@ import {
   EmptyTitle,
   Skeleton,
 } from '@nexura/ui';
-import type { GuildPlugin } from '@nexura/types';
+import type { GuildPlugin, GuildPluginDetail } from '@nexura/types';
 import { useQuery } from '@tanstack/react-query';
 import {
+  AlertCircleIcon,
   ArchiveIcon,
   FileClockIcon,
   MonitorIcon,
   PowerOffIcon,
   SettingsIcon,
   TerminalIcon,
+  TrashIcon,
+  UploadIcon,
 } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Component, type ReactNode } from 'react';
+import { Component, type ReactNode, useState } from 'react';
 
 import { ErrorState } from '../components/error-state.js';
+import { PageHeader } from '../components/page-header.js';
 import { PluginDashboardShell } from '../components/plugin-dashboard-shell.js';
 import { PluginSchemaDashboard } from '../components/plugin-schema-dashboard.js';
+import { PluginUploadDialog } from '../components/plugin-upload-dialog.js';
 import { guildPluginQuery } from '../hooks/queries.js';
 import { useGuildWorkspace } from '../hooks/use-guild-workspace.js';
 import { api } from '../lib/api-client.js';
@@ -109,9 +115,19 @@ export function PluginDetailPage() {
     );
   }
 
+  const isBroken = plugin.status === 'BROKEN' || (plugin.dashboardContent.mode === 'none' && plugin.dashboardContent.errors.length > 0);
+  if (isBroken) {
+    return (
+      <PluginRepairCard
+        plugin={plugin}
+        guildId={guildId}
+        onBack={() => navigate(getGuildPluginsPath(guildId))}
+      />
+    );
+  }
+
   const schema = plugin.dashboardContent.schema;
-  const defaultTabs = schema?.tabs.map((tab) => tab.id) ?? ['overview', 'settings', 'commands', 'logs'];
-  const pluginTabs = plugin.dashboard?.tabs?.length ? plugin.dashboard.tabs : defaultTabs;
+  const pluginTabs = plugin.dashboard.tabs.length ? plugin.dashboard.tabs : (schema?.tabs.map((tab) => tab.id) ?? ['overview']);
   const schemaContentMap = schema
     ? Object.fromEntries(
         schema.tabs.map((tab) => [
@@ -127,16 +143,6 @@ export function PluginDetailPage() {
     commands: schemaContentMap.commands ?? <CommandsPlaceholder plugin={plugin} />,
     logs: <PluginLogsTab guildId={guildId} pluginId={pluginId} />,
   };
-
-  if (plugin.dashboardContent.mode === 'none' && plugin.dashboardContent.errors.length > 0) {
-    contentMap[pluginTabs[0] ?? 'overview'] = (
-      <PluginDashboardError
-        pluginId={pluginId}
-        tabId={pluginTabs[0] ?? 'overview'}
-        message={plugin.dashboardContent.errors.join('\n')}
-      />
-    );
-  }
 
   return (
     <PluginContentErrorBoundary pluginId={pluginId} tabId={pluginTabs[0] ?? 'overview'}>
@@ -189,6 +195,54 @@ function PluginDashboardError({ pluginId, tabId, message }: { pluginId: string; 
   );
 }
 
+function PluginRepairCard({ plugin, guildId, onBack }: { plugin: GuildPluginDetail; guildId: string; onBack: () => void }) {
+  const [uploadOpen, setUploadOpen] = useState(false);
+  const navigate = useNavigate();
+
+  return (
+    <div className="flex flex-col gap-6">
+      <PageHeader eyebrow="Plugin" title={plugin.name} description="This plugin installation is incomplete." actions={
+        <Button variant="outline" onClick={onBack}>Installed</Button>
+      } />
+      <Card className="border-destructive/40 bg-destructive/5">
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <AlertCircleIcon className="size-5 text-destructive" />
+            <CardTitle className="text-base">Plugin installation incomplete</CardTitle>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm">
+            Upload a complete plugin package or remove this plugin.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Button onClick={() => setUploadOpen(true)}>
+              <UploadIcon className="mr-2 size-4" />
+              Re-upload plugin
+            </Button>
+            <Button variant="outline" onClick={() => navigate(getGuildPluginsPath(guildId))}>
+              <TrashIcon className="mr-2 size-4" />
+              Remove plugin
+            </Button>
+          </div>
+          {plugin.dashboardContent.errors.length > 0 || plugin.brokenReason ? (
+            <details className="mt-4 rounded-md border border-border bg-card p-3">
+              <summary className="cursor-pointer text-sm font-medium">Advanced details</summary>
+              <div className="mt-2 space-y-1 text-xs text-muted-foreground">
+                {plugin.brokenReason ? <p>{plugin.brokenReason}</p> : null}
+                {plugin.dashboardContent.errors.map((error, index) => (
+                  <p key={index}>{error}</p>
+                ))}
+              </div>
+            </details>
+          ) : null}
+        </CardContent>
+      </Card>
+      <PluginUploadDialog guildId={guildId} open={uploadOpen} onOpenChange={setUploadOpen} />
+    </div>
+  );
+}
+
 function OverviewPlaceholder({ plugin }: { plugin: GuildPlugin }) {
   return (
     <Card>
@@ -199,9 +253,6 @@ function OverviewPlaceholder({ plugin }: { plugin: GuildPlugin }) {
         <p>{plugin.description}</p>
         <p>Version: {plugin.version}</p>
         <p>Author: {plugin.author}</p>
-        <p className="mt-6 italic">
-          This plugin dashboard page is ready for real {plugin.name} settings in Phase 3.
-        </p>
       </CardContent>
     </Card>
   );
@@ -216,7 +267,7 @@ function SettingsPlaceholder({ plugin }: { plugin: GuildPlugin }) {
         </span>
         <EmptyTitle className="text-base">Plugin settings</EmptyTitle>
         <EmptyDescription>
-          {plugin.name} settings will be available when the plugin defines its configuration schema.
+          {plugin.name} does not have configurable settings on this tab.
         </EmptyDescription>
       </EmptyHeader>
     </Empty>

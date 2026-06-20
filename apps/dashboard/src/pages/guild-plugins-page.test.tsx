@@ -26,6 +26,7 @@ const welcomePlugin: GuildPlugin = {
   version: '1.0.0',
   author: 'Nexura',
   status: 'INSTALLED',
+  brokenReason: null,
   enabled: true,
   guildStatus: 'ENABLED',
   installedAt: '2024-01-01T00:00:00Z',
@@ -40,11 +41,27 @@ const ticketsPlugin: GuildPlugin = {
   version: '1.0.0',
   author: 'Nexura',
   status: 'INSTALLED',
+  brokenReason: null,
   enabled: false,
   guildStatus: 'DISABLED',
   installedAt: '2024-01-01T00:00:00Z',
   updatedAt: '2024-01-01T00:00:00Z',
   dashboard: null,
+};
+
+const brokenPlugin: GuildPlugin = {
+  id: 'broken',
+  name: 'Broken Plugin',
+  description: 'Missing dashboard',
+  version: '1.0.0',
+  author: 'Nexura',
+  status: 'BROKEN',
+  brokenReason: 'This plugin says it has a dashboard, but no dashboard interface was included.',
+  enabled: false,
+  guildStatus: 'DISABLED',
+  installedAt: '2024-01-01T00:00:00Z',
+  updatedAt: '2024-01-01T00:00:00Z',
+  dashboard: { enabled: true, route: '/plugins/broken', label: 'Broken', icon: 'Puzzle', tabs: ['overview'] },
 };
 
 const mockPlugins: GuildPlugin[] = [welcomePlugin, ticketsPlugin];
@@ -174,5 +191,18 @@ describe('GuildPluginsPage', () => {
     const refreshButton = await screen.findByRole('button', { name: /refresh plugin list/i });
     expect(refreshButton).toBeInTheDocument();
     expect(refreshButton).not.toBeDisabled();
+  });
+
+  it('shows a broken status and disables manage for broken plugins', async () => {
+    vi.spyOn(api, 'getGuildPlugins').mockResolvedValue({ data: [brokenPlugin] });
+    renderPage(<GuildPluginsPage />);
+
+    const brokenRow = await screen.findByTestId('plugin-row-broken');
+    expect(within(brokenRow).getByText('Broken')).toBeInTheDocument();
+    const menuButton = within(brokenRow).getByRole('button', { name: /actions for broken plugin/i });
+    const user = userEvent.setup();
+    await user.click(menuButton);
+    expect(await screen.findByRole('menuitem', { name: /needs repair/i })).toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: /manage broken plugin/i })).not.toBeInTheDocument();
   });
 });

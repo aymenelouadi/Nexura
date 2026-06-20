@@ -19,7 +19,7 @@ export const guildPermissionRole = pgEnum('guild_permission_role', [
   'ADMINISTRATOR',
   'MANAGER',
 ]);
-export const pluginStatus = pgEnum('plugin_status', ['INSTALLED', 'ERROR']);
+export const pluginStatus = pgEnum('plugin_status', ['INSTALLED', 'ERROR', 'BROKEN']);
 export const pluginLogLevel = pgEnum('plugin_log_level', [
   'DEBUG',
   'INFO',
@@ -129,6 +129,7 @@ export const plugins = pgTable('plugins', {
   description: text('description').notNull(),
   author: varchar('author', { length: 100 }).notNull(),
   status: pluginStatus('status').default('INSTALLED').notNull(),
+  brokenReason: varchar('broken_reason', { length: 255 }),
   installedAt: timestamp('installed_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 });

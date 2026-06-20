@@ -128,6 +128,7 @@ export const handlers = [
           description: 'Welcome plugin',
           author: 'Nexura',
           status: 'INSTALLED',
+          brokenReason: null,
           enabled: true,
           guildStatus: 'ENABLED',
           installedAt: new Date().toISOString(),

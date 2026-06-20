@@ -45,6 +45,13 @@ export class PluginDiscoveryService {
     return join(INSTALLED_PLUGIN_DIRECTORY, pluginId);
   }
 
+  getBundledPluginDirectory(pluginId: string): string {
+    if (!/^[a-z][a-z0-9-]{1,63}$/u.test(pluginId)) {
+      throw new Error('Plugin ID is invalid.');
+    }
+    return join(PLUGIN_DIRECTORY, pluginId);
+  }
+
   private async getPluginDirectories(): Promise<string[]> {
     const directories: string[] = [];
 

@@ -493,11 +493,11 @@ function useFilteredPlugins(
 }
 
 function PluginStatusBadge({ plugin }: { plugin: GuildPlugin }) {
-  if (plugin.status === 'ERROR') {
+  if (plugin.status === 'BROKEN' || plugin.status === 'ERROR') {
     return (
       <Badge variant="destructive">
         <AlertCircleIcon className="mr-1 size-3" />
-        Error
+        {plugin.status === 'BROKEN' ? 'Broken' : 'Error'}
       </Badge>
     );
   }
@@ -515,6 +515,7 @@ interface PluginActionsProps {
 
 function PluginActions({ plugin, pending, onToggle, onManage, onLogs, onDelete }: PluginActionsProps) {
   const hasDashboard = plugin.dashboard !== null;
+  const isBroken = plugin.status === 'BROKEN' || plugin.status === 'ERROR';
 
   return (
     <div className="flex items-center justify-end gap-2">
@@ -527,7 +528,7 @@ function PluginActions({ plugin, pending, onToggle, onManage, onLogs, onDelete }
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
-          {hasDashboard ? (
+          {hasDashboard && !isBroken ? (
             <DropdownMenuItem disabled={!plugin.enabled} onClick={onManage} aria-label={`Manage ${plugin.name}`}>
               <CogIcon className="mr-2 size-4" />
               Manage
@@ -537,6 +538,12 @@ function PluginActions({ plugin, pending, onToggle, onManage, onLogs, onDelete }
             <DropdownMenuItem disabled>
               <EyeIcon className="mr-2 size-4" />
               No dashboard
+            </DropdownMenuItem>
+          ) : null}
+          {isBroken ? (
+            <DropdownMenuItem disabled>
+              <AlertCircleIcon className="mr-2 size-4" />
+              Needs repair
             </DropdownMenuItem>
           ) : null}
           <DropdownMenuItem onClick={onLogs} aria-label={`View logs for ${plugin.name}`}>
@@ -578,6 +585,7 @@ function PluginCard({
   onDelete: () => void;
 }) {
   const hasDashboard = plugin.dashboard !== null;
+  const isBroken = plugin.status === 'BROKEN' || plugin.status === 'ERROR';
 
   return (
     <div className="flex flex-col gap-4 rounded-lg border border-border bg-card p-4">
@@ -613,7 +621,7 @@ function PluginCard({
       </div>
       <div className="flex flex-wrap gap-2">
         <PluginSwitch plugin={plugin} pending={pending} onToggle={onToggle} />
-        {hasDashboard ? (
+        {hasDashboard && !isBroken ? (
           <Button size="sm" variant="outline" onClick={onManage} disabled={!plugin.enabled} aria-label={`Manage ${plugin.name}`}>
             Manage
           </Button>

@@ -68,7 +68,7 @@ export function PluginSchemaDashboard({ guildId, pluginId, schema, tabId }: Plug
   }, [schema, storageKeys, storageQueries.map((query) => query.dataUpdatedAt).join(':')]);
 
   if (!tab) {
-    return <PluginSchemaError title="Plugin tab is missing" message={`No schema tab matches "${tabId}".`} />;
+    return <PluginSchemaError title="Tab not found" message={`The requested tab is not available for this plugin.`} />;
   }
 
   if (storageQueries.some((query) => query.isLoading) || templates.isLoading || channels.isLoading) {
@@ -111,7 +111,7 @@ export function PluginSchemaDashboard({ guildId, pluginId, schema, tabId }: Plug
     <div className="flex flex-col gap-5">
       {tab.description ? <p className="text-sm text-muted-foreground">{tab.description}</p> : null}
       {tab.sections.length === 0 ? (
-        <PluginSchemaError title="No tab content" message={`The ${tab.label} tab has no sections in dashboard.schema.json.`} />
+        <PluginSchemaError title="No tab content" message={`The ${tab.label} tab does not have any configurable sections.`} />
       ) : (
         tab.sections.map((section) => <SchemaSection key={section.id} section={section} context={context} />)
       )}
@@ -135,8 +135,8 @@ function SchemaSection({ section, context }: { section: PluginDashboardSection; 
         {section.fields.length === 0 ? (
           <Empty className="min-h-40 border-dashed">
             <EmptyHeader>
-              <EmptyTitle className="text-base">Managed by Core</EmptyTitle>
-              <EmptyDescription>This tab is available and will use Core managers as data is added.</EmptyDescription>
+              <EmptyTitle className="text-base">No settings</EmptyTitle>
+              <EmptyDescription>This section does not have any configurable settings.</EmptyDescription>
             </EmptyHeader>
           </Empty>
         ) : (

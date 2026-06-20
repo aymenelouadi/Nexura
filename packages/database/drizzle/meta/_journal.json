@@ -50,6 +50,13 @@
       "when": 1781276907066,
       "tag": "0006_drop_activity_events_user_id",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1781931570630,
+      "tag": "0007_broken_plugin_status",
+      "breakpoints": true
     }
   ]
 }

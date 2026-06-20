@@ -287,7 +287,12 @@ export class PluginUploadService {
       raw = await readFile(schemaPath, 'utf8');
     } catch (error) {
       if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
-        return;
+        throw new PluginOperationException(
+          'PLUGIN_DASHBOARD_MISSING',
+          'This plugin says it has a dashboard, but no dashboard interface was included. Please upload a complete plugin package.',
+          HttpStatus.BAD_REQUEST,
+          { pluginId: manifest.id },
+        );
       }
       throw error;
     }
@@ -297,7 +302,7 @@ export class PluginUploadService {
     } catch (error) {
       throw new PluginOperationException(
         'PLUGIN_DASHBOARD_SCHEMA_INVALID',
-        'dashboard.schema.json is not a valid Nexura dashboard schema.',
+        'The plugin dashboard file is not valid. Please upload a complete plugin package.',
         HttpStatus.BAD_REQUEST,
         { pluginId: manifest.id, reason: error instanceof Error ? error.message : 'Unknown schema error.' },
       );
