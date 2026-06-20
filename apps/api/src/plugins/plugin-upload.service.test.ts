@@ -225,7 +225,7 @@ describe('PluginUploadService', () => {
     expect(result.id).toBe('test-plugin');
   });
 
-  it('rejects dashboard-enabled plugins that do not include dashboard content', async () => {
+  it('uploads dashboard-enabled plugins without dashboard.schema.json so Core can generate a dashboard', async () => {
     const zip = await createZipBuffer({
       'plugin.json': JSON.stringify(dashboardManifest),
       'index.js': 'module.exports = {};',
@@ -241,28 +241,23 @@ describe('PluginUploadService', () => {
       deps.pluginMigrationService,
     );
 
-    await expect(
-      service.upload(
-        {
-          fieldname: 'file',
-          originalname: 'plugin.nexura',
-          encoding: '7bit',
-          mimetype: 'application/octet-stream',
-          size: zip.length,
-          destination: '',
-          filename: 'plugin.nexura',
-          path: filePath,
-          buffer: zip,
-        },
-        '1111111111111111111',
-      ),
-    ).rejects.toMatchObject({
-      response: {
-        error: {
-          code: 'PLUGIN_DASHBOARD_CONTENT_MISSING',
-        },
+    const result = await service.upload(
+      {
+        fieldname: 'file',
+        originalname: 'plugin.nexura',
+        encoding: '7bit',
+        mimetype: 'application/octet-stream',
+        size: zip.length,
+        destination: '',
+        filename: 'plugin.nexura',
+        path: filePath,
+        buffer: zip,
       },
-    });
+      '1111111111111111111',
+    );
+
+    expect(result.dashboard?.enabled).toBe(true);
+    expect(deps.pluginRepository.registerManifest).toHaveBeenCalled();
   });
 
   it('rejects unsupported archive extensions', async () => {

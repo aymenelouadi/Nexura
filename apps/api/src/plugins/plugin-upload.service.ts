@@ -250,13 +250,11 @@ export class PluginUploadService {
     let raw: string;
     try {
       raw = await readFile(schemaPath, 'utf8');
-    } catch {
-      throw new PluginOperationException(
-        'PLUGIN_DASHBOARD_CONTENT_MISSING',
-        'Plugin dashboard is enabled but dashboard.schema.json was not found.',
-        HttpStatus.BAD_REQUEST,
-        { pluginId: manifest.id },
-      );
+    } catch (error) {
+      if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
+        return;
+      }
+      throw error;
     }
 
     try {
