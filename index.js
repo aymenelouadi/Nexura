@@ -70,7 +70,7 @@ async function main() {
     const bot = startService({
       name: 'bot',
       cwd: path.join(ROOT, 'apps', 'bot'),
-      command: process.execPath,
+      command: bin('apps', 'bot', 'node_modules', '.bin', 'tsx'),
       args: ['dist/main.js'],
       onStdoutLine: (line) => {
         if (line.includes('Discord client is ready')) {

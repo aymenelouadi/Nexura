@@ -532,11 +532,44 @@ describe('PluginUploadService', () => {
     ).rejects.toThrow(PluginOperationException);
   });
 
-  it('rejects a TypeScript plugin without compiled JavaScript output', async () => {
+  it('accepts a TypeScript plugin without compiled JavaScript output', async () => {
     const tsManifest = { ...validManifest, entry: 'index.ts' };
     const zip = await createZipBuffer({
       'plugin.json': JSON.stringify(tsManifest),
       'index.ts': 'export default {};',
+    });
+    const { filePath, dir } = await createTempFile(zip);
+    tempPaths.push(dir);
+
+    const deps = createMockDeps();
+    const service = new PluginUploadService(
+      deps.pluginDiscoveryService,
+      deps.pluginManager,
+      deps.pluginRepository,
+      deps.pluginMigrationService,
+    );
+
+    const result = await service.upload(
+      {
+        fieldname: 'file',
+        originalname: 'plugin.nexura',
+        encoding: '7bit',
+        mimetype: 'application/octet-stream',
+        size: zip.length,
+        destination: '',
+        filename: 'plugin.nexura',
+        path: filePath,
+        buffer: zip,
+      },
+      '1111111111111111111',
+    );
+
+    expect(result.id).toBe('test-plugin');
+  });
+
+  it('rejects a plugin when no runtime entry exists', async () => {
+    const zip = await createZipBuffer({
+      'plugin.json': JSON.stringify(validManifest),
     });
     const { filePath, dir } = await createTempFile(zip);
     tempPaths.push(dir);
@@ -564,7 +597,7 @@ describe('PluginUploadService', () => {
         },
         '1111111111111111111',
       ),
-    ).rejects.toThrow('compiled');
+    ).rejects.toThrow('Plugin entry "index.js" was not found');
   });
 
   it('accepts a TypeScript plugin when dist/ contains the compiled JS entry', async () => {

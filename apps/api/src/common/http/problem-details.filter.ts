@@ -53,7 +53,7 @@ export class ProblemDetailsFilter implements ExceptionFilter {
     }));
 
     return {
-      type: 'https://nexura.dev/problems/validation-error',
+      type: 'about:blank',
       title: 'Validation Error',
       status: HttpStatus.BAD_REQUEST,
       detail: 'The request did not pass validation.',
@@ -69,7 +69,7 @@ export class ProblemDetailsFilter implements ExceptionFilter {
 
     if (typeof response === 'object' && response !== null && 'error' in response) {
       return {
-        type: `https://nexura.dev/problems/${getProblemSlug(status)}`,
+        type: 'about:blank',
         title: getProblemTitle(status),
         status,
         detail: (response.error as { message?: string }).message ?? 'Plugin operation failed.',
@@ -82,7 +82,7 @@ export class ProblemDetailsFilter implements ExceptionFilter {
     const detail = getHttpExceptionDetail(error);
 
     return {
-      type: `https://nexura.dev/problems/${getProblemSlug(status)}`,
+      type: 'about:blank',
       title: getProblemTitle(status),
       status,
       detail,
@@ -93,7 +93,7 @@ export class ProblemDetailsFilter implements ExceptionFilter {
 
   private createInternalProblem(request: Request) {
     return {
-      type: 'https://nexura.dev/problems/internal-server-error',
+      type: 'about:blank',
       title: 'Internal Server Error',
       status: HttpStatus.INTERNAL_SERVER_ERROR,
       detail: 'An unexpected error occurred.',

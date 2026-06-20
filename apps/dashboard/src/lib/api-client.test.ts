@@ -39,7 +39,7 @@ describe('api-client', () => {
         headers: { get: () => 'request-1' },
         url: '/api/v1/guilds/1111111111111111111/plugins/upload',
         json: () => ({
-          type: 'https://nexura.dev/problems/conflict',
+          type: 'about:blank',
           title: 'Conflict',
           status: 409,
           detail: 'Plugin "welcome" is already installed.',

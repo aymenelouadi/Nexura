@@ -59,6 +59,7 @@ export class PluginUploadService {
   ) {}
 
   async upload(file: MulterFile, guildId: string): Promise<PluginManifest> {
+    this.logger.log({ hasFile: Boolean(file), hasPath: Boolean(file?.path), originalname: file?.originalname, guildId }, 'Plugin upload request received');
     if (!file?.path) {
       throw new PluginOperationException(
         'PLUGIN_UPLOAD_FILE_MISSING',
@@ -88,6 +89,7 @@ export class PluginUploadService {
       this.logger.log({ pluginId: manifest.id }, 'Reloading plugin manifests after upload');
       await this.pluginManager.reloadManifests();
 
+      this.logger.log({ pluginId: manifest.id, targetDir }, 'Plugin upload completed successfully');
       return manifest;
     } finally {
       await rm(tempDir, { recursive: true, force: true }).catch(() => {});
@@ -255,6 +257,7 @@ export class PluginUploadService {
     const candidates = [
       join(sourceDir, 'dist', jsEntry),
       join(sourceDir, jsEntry),
+      join(sourceDir, manifest.entry),
     ];
 
     for (const candidate of candidates) {
@@ -266,15 +269,6 @@ export class PluginUploadService {
       } catch {
         // continue to next candidate
       }
-    }
-
-    // If entry is .ts and we haven't found a .js counterpart, reject to avoid
-    // runtime failures in production where Node cannot execute TypeScript directly.
-    if (manifest.entry.endsWith('.ts')) {
-      throw new BadRequestException(
-        `Plugin entry "${manifest.entry}" is TypeScript but no compiled JavaScript was found. ` +
-          `Checked: ${candidates.join(', ')}. Please build the plugin before packaging and include the dist/ folder.`,
-      );
     }
 
     throw new BadRequestException(
