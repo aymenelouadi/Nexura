@@ -4,8 +4,17 @@ import {
   Logger,
   type OnApplicationBootstrap,
 } from '@nestjs/common';
-import type { GuildPlugin, PluginDashboard, PluginLog, PluginLogLevel, PluginManifest } from '@nexura/types';
-import { rm } from 'node:fs/promises';
+import {
+  pluginDashboardSchemaDocumentSchema,
+  type GuildPlugin,
+  type GuildPluginDetail,
+  type PluginDashboard,
+  type PluginLog,
+  type PluginLogLevel,
+  type PluginManifest,
+} from '@nexura/types';
+import { readFile, rm } from 'node:fs/promises';
+import { join } from 'node:path';
 
 import { PluginDiscoveryService } from './plugin-discovery.service.js';
 import { PluginMigrationService } from './plugin-migration.service.js';
@@ -60,6 +69,14 @@ export class PluginManager implements OnApplicationBootstrap {
       );
     }
     return plugin;
+  }
+
+  async getPluginDetail(guildId: string, pluginId: string): Promise<GuildPluginDetail> {
+    const plugin = await this.getPluginStatus(guildId, pluginId);
+    return {
+      ...plugin,
+      dashboardContent: await this.getDashboardContent(guildId, pluginId),
+    };
   }
 
   async enablePlugin(guildId: string, pluginId: string): Promise<GuildPlugin> {
@@ -137,6 +154,61 @@ export class PluginManager implements OnApplicationBootstrap {
     return { ...plugin, dashboard };
   }
 
+  getPluginAssetPath(pluginId: string, filename: string): string[] {
+    const safeName = filename.replace(/[^a-zA-Z0-9.\-_]/gu, '');
+    return [
+      join(this.pluginDiscoveryService.getInstalledPluginDirectory(pluginId), 'assets', safeName),
+      join(this.pluginDiscoveryService.getPluginDirectory(pluginId), 'assets', safeName),
+    ];
+  }
+
+  private async getDashboardContent(guildId: string, pluginId: string): Promise<GuildPluginDetail['dashboardContent']> {
+    const manifest = this.manifestMap.get(pluginId);
+    if (!manifest?.dashboard?.enabled) {
+      return { mode: 'none', schema: null, bundleUrl: null, assetsBaseUrl: null, errors: [] };
+    }
+
+    const schema = await this.readDashboardSchema(pluginId);
+    if (schema) {
+      return {
+        mode: 'schema',
+        schema,
+        bundleUrl: null,
+        assetsBaseUrl: `/api/v1/guilds/${guildId}/plugins/${pluginId}/assets`,
+        errors: [],
+      };
+    }
+
+    return {
+      mode: 'none',
+      schema: null,
+      bundleUrl: null,
+      assetsBaseUrl: null,
+      errors: ['Plugin dashboard is enabled but no dashboard.schema.json was found.'],
+    };
+  }
+
+  private async readDashboardSchema(pluginId: string): Promise<GuildPluginDetail['dashboardContent']['schema']> {
+    const candidatePaths = [
+      join(this.pluginDiscoveryService.getInstalledPluginDirectory(pluginId), 'dashboard.schema.json'),
+      join(this.pluginDiscoveryService.getPluginDirectory(pluginId), 'dashboard.schema.json'),
+    ];
+
+    for (const schemaPath of candidatePaths) {
+      try {
+        const content = await readFile(schemaPath, 'utf8');
+        return pluginDashboardSchemaDocumentSchema.parse(JSON.parse(content));
+      } catch (error) {
+        if (!isMissingFile(error)) {
+          this.logger.warn(`Failed to load dashboard schema for ${pluginId}: ${(error as Error).message}`);
+          return null;
+        }
+      }
+    }
+
+    return null;
+  }
+
   private async registerDiscoveredPlugins(): Promise<PluginManifest[]> {
     const manifests = await this.pluginDiscoveryService.discoverManifests();
     await this.pluginRepository.removeMissingPlugins(manifests.map((manifest) => manifest.id));
@@ -147,4 +219,8 @@ export class PluginManager implements OnApplicationBootstrap {
     }
     return manifests;
   }
+}
+
+function isMissingFile(error: unknown): boolean {
+  return error instanceof Error && 'code' in error && error.code === 'ENOENT';
 }

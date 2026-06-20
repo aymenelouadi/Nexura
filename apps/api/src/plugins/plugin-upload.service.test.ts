@@ -33,6 +33,40 @@ const validManifest: PluginManifest = {
   },
 };
 
+const validDashboardSchema = {
+  version: 1,
+  contentMode: 'schema',
+  tabs: [
+    {
+      id: 'settings',
+      label: 'Settings',
+      sections: [
+        {
+          id: 'settings.main',
+          title: 'Settings',
+          fields: [],
+          actions: [],
+        },
+      ],
+    },
+  ],
+  defaults: {},
+  previewVariables: {},
+  defaultMessages: {},
+};
+
+const dashboardManifest: PluginManifest = {
+  ...validManifest,
+  capabilities: { ...validManifest.capabilities, dashboard: true },
+  dashboard: {
+    enabled: true,
+    route: '/plugins/test-plugin',
+    label: 'Test Plugin',
+    icon: 'Puzzle',
+    tabs: ['settings'],
+  },
+};
+
 function createMockDeps(overrides?: {
   pluginDir?: string;
   existingPlugin?: boolean;
@@ -120,6 +154,115 @@ describe('PluginUploadService', () => {
     expect(result.id).toBe('test-plugin');
     expect(deps.pluginMigrationService.apply).toHaveBeenCalled();
     expect(deps.pluginManager.reloadManifests).toHaveBeenCalled();
+  });
+
+  it('uploads a dashboard-capable .nexura plugin when dashboard.schema.json is present', async () => {
+    const zip = await createZipBuffer({
+      'plugin.json': JSON.stringify(dashboardManifest),
+      'dashboard.schema.json': JSON.stringify(validDashboardSchema),
+      'index.js': 'module.exports = {};',
+    });
+    const { filePath, dir } = await createTempFile(zip);
+    tempPaths.push(dir);
+
+    const deps = createMockDeps();
+    const service = new PluginUploadService(
+      deps.pluginDiscoveryService,
+      deps.pluginManager,
+      deps.pluginRepository,
+      deps.pluginMigrationService,
+    );
+
+    const result = await service.upload(
+      {
+        fieldname: 'file',
+        originalname: 'test-plugin.nexura',
+        encoding: '7bit',
+        mimetype: 'application/octet-stream',
+        size: zip.length,
+        destination: '',
+        filename: 'plugin.nexura',
+        path: filePath,
+        buffer: zip,
+      },
+      '1111111111111111111',
+    );
+
+    expect(result.dashboard?.enabled).toBe(true);
+  });
+
+  it('uploads a valid .codenexus plugin package', async () => {
+    const zip = await createZipBuffer({
+      'plugin.json': JSON.stringify(validManifest),
+      'index.js': 'module.exports = {};',
+    });
+    const { filePath, dir } = await createTempFile(zip);
+    tempPaths.push(dir);
+
+    const deps = createMockDeps();
+    const service = new PluginUploadService(
+      deps.pluginDiscoveryService,
+      deps.pluginManager,
+      deps.pluginRepository,
+      deps.pluginMigrationService,
+    );
+
+    const result = await service.upload(
+      {
+        fieldname: 'file',
+        originalname: 'test-plugin.codenexus',
+        encoding: '7bit',
+        mimetype: 'application/octet-stream',
+        size: zip.length,
+        destination: '',
+        filename: 'plugin.codenexus',
+        path: filePath,
+        buffer: zip,
+      },
+      '1111111111111111111',
+    );
+
+    expect(result.id).toBe('test-plugin');
+  });
+
+  it('rejects dashboard-enabled plugins that do not include dashboard content', async () => {
+    const zip = await createZipBuffer({
+      'plugin.json': JSON.stringify(dashboardManifest),
+      'index.js': 'module.exports = {};',
+    });
+    const { filePath, dir } = await createTempFile(zip);
+    tempPaths.push(dir);
+
+    const deps = createMockDeps();
+    const service = new PluginUploadService(
+      deps.pluginDiscoveryService,
+      deps.pluginManager,
+      deps.pluginRepository,
+      deps.pluginMigrationService,
+    );
+
+    await expect(
+      service.upload(
+        {
+          fieldname: 'file',
+          originalname: 'plugin.nexura',
+          encoding: '7bit',
+          mimetype: 'application/octet-stream',
+          size: zip.length,
+          destination: '',
+          filename: 'plugin.nexura',
+          path: filePath,
+          buffer: zip,
+        },
+        '1111111111111111111',
+      ),
+    ).rejects.toMatchObject({
+      response: {
+        error: {
+          code: 'PLUGIN_DASHBOARD_CONTENT_MISSING',
+        },
+      },
+    });
   });
 
   it('rejects unsupported archive extensions', async () => {

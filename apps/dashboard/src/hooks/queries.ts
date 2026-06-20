@@ -55,6 +55,16 @@ export function guildPluginsQuery(guildId: string) {
   });
 }
 
+export function guildPluginQuery(guildId: string, pluginId: string) {
+  return queryOptions({
+    queryKey: ['guilds', guildId, 'plugins', pluginId],
+    queryFn: () => api.getGuildPlugin(guildId, pluginId),
+    refetchOnWindowFocus: false,
+    retry: safeRetry,
+    staleTime: 15_000,
+  });
+}
+
 export function guildPluginLogsQuery(guildId: string) {
   return queryOptions({
     queryKey: ['guilds', guildId, 'plugins', 'logs'],

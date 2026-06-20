@@ -21,29 +21,29 @@ import {
   TerminalIcon,
 } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
-import type { ReactNode } from 'react';
+import { Component, type ReactNode } from 'react';
 
 import { ErrorState } from '../components/error-state.js';
 import { PluginDashboardShell } from '../components/plugin-dashboard-shell.js';
-import { guildPluginsQuery } from '../hooks/queries.js';
+import { PluginSchemaDashboard } from '../components/plugin-schema-dashboard.js';
+import { guildPluginQuery } from '../hooks/queries.js';
 import { useGuildWorkspace } from '../hooks/use-guild-workspace.js';
 import { api } from '../lib/api-client.js';
 import { getGuildPluginsPath } from '../lib/guild-actions.js';
-import { getPluginContentMap } from '../plugins/plugin-dashboard-registry.js';
 
 export function PluginDetailPage() {
   const navigate = useNavigate();
   const { guildId = '', pluginId = '' } = useParams<{ guildId: string; pluginId: string }>();
   const { guild } = useGuildWorkspace();
 
-  const plugins = useQuery({
-    ...guildPluginsQuery(guildId),
+  const pluginDetail = useQuery({
+    ...guildPluginQuery(guildId, pluginId),
     enabled: guild.data?.botConnected === true && /^\d{17,20}$/.test(guildId),
   });
 
-  const plugin = plugins.data?.data.find((p) => p.id === pluginId);
+  const plugin = pluginDetail.data;
 
-  if (guild.isLoading || plugins.isLoading) {
+  if (guild.isLoading || pluginDetail.isLoading) {
     return <PluginDetailSkeleton />;
   }
   if (guild.isError) {
@@ -58,8 +58,8 @@ export function PluginDetailPage() {
       />
     );
   }
-  if (plugins.isError) {
-    return <ErrorState message={(plugins.error as Error).message} onRetry={() => void plugins.refetch()} />;
+  if (pluginDetail.isError) {
+    return <ErrorState message={(pluginDetail.error as Error).message} onRetry={() => void pluginDetail.refetch()} />;
   }
   if (!plugin) {
     return (
@@ -109,30 +109,83 @@ export function PluginDetailPage() {
     );
   }
 
-  const defaultTabs = ['overview', 'settings', 'commands', 'logs'];
+  const schema = plugin.dashboardContent.schema;
+  const defaultTabs = schema?.tabs.map((tab) => tab.id) ?? ['overview', 'settings', 'commands', 'logs'];
   const pluginTabs = plugin.dashboard?.tabs?.length ? plugin.dashboard.tabs : defaultTabs;
-
-  const pluginContentMap = getPluginContentMap(pluginId, guildId);
+  const schemaContentMap = schema
+    ? Object.fromEntries(
+        schema.tabs.map((tab) => [
+          tab.id,
+          <PluginSchemaDashboard key={tab.id} guildId={guildId} pluginId={pluginId} schema={schema} tabId={tab.id} />,
+        ]),
+      )
+    : {};
   const contentMap: Record<string, ReactNode> = {
-    overview: pluginContentMap?.overview ?? <OverviewPlaceholder plugin={plugin} />,
-    settings: pluginContentMap?.settings ?? <SettingsPlaceholder plugin={plugin} />,
-    commands: pluginContentMap?.commands ?? <CommandsPlaceholder plugin={plugin} />,
+    overview: <OverviewPlaceholder plugin={plugin} />,
+    settings: <SettingsPlaceholder plugin={plugin} />,
+    ...schemaContentMap,
+    commands: schemaContentMap.commands ?? <CommandsPlaceholder plugin={plugin} />,
     logs: <PluginLogsTab guildId={guildId} pluginId={pluginId} />,
-    ...pluginContentMap,
   };
 
+  if (plugin.dashboardContent.mode === 'none' && plugin.dashboardContent.errors.length > 0) {
+    contentMap[pluginTabs[0] ?? 'overview'] = (
+      <PluginDashboardError
+        pluginId={pluginId}
+        tabId={pluginTabs[0] ?? 'overview'}
+        message={plugin.dashboardContent.errors.join('\n')}
+      />
+    );
+  }
+
   return (
-    <PluginDashboardShell
-      guildId={guildId}
-      pluginId={pluginId}
-      pluginName={plugin.name}
-      pluginVersion={plugin.version}
-      pluginDashboard={plugin.dashboard}
-      pluginEnabled={plugin.enabled}
-      onBack={() => navigate(getGuildPluginsPath(guildId))}
-      tabs={pluginTabs}
-      contentMap={contentMap}
-    />
+    <PluginContentErrorBoundary pluginId={pluginId} tabId={pluginTabs[0] ?? 'overview'}>
+      <PluginDashboardShell
+        guildId={guildId}
+        pluginId={pluginId}
+        pluginName={plugin.name}
+        pluginVersion={plugin.version}
+        pluginDashboard={plugin.dashboard}
+        pluginEnabled={plugin.enabled}
+        onBack={() => navigate(getGuildPluginsPath(guildId))}
+        tabs={pluginTabs}
+        contentMap={contentMap}
+      />
+    </PluginContentErrorBoundary>
+  );
+}
+
+class PluginContentErrorBoundary extends Component<
+  { pluginId: string; tabId: string; children: ReactNode },
+  { error: Error | null }
+> {
+  override state: { error: Error | null } = { error: null };
+
+  static getDerivedStateFromError(error: Error): { error: Error } {
+    return { error };
+  }
+
+  override render() {
+    if (this.state.error) {
+      return <PluginDashboardError pluginId={this.props.pluginId} tabId={this.props.tabId} message={this.state.error.message} />;
+    }
+    return this.props.children;
+  }
+}
+
+function PluginDashboardError({ pluginId, tabId, message }: { pluginId: string; tabId: string; message: string }) {
+  return (
+    <div data-testid="plugin-dashboard-error" className="rounded-lg border border-destructive/40 bg-destructive/5 p-5">
+      <h2 className="text-base font-semibold text-destructive">Plugin dashboard failed to load</h2>
+      <dl className="mt-3 grid gap-2 text-sm">
+        <div><dt className="font-medium">Plugin</dt><dd>{pluginId}</dd></div>
+        <div><dt className="font-medium">Tab</dt><dd>{tabId}</dd></div>
+        <div><dt className="font-medium">Details</dt><dd>{message}</dd></div>
+      </dl>
+      <button type="button" className="mt-4 text-sm font-medium text-destructive underline" onClick={() => window.location.reload()}>
+        Retry
+      </button>
+    </div>
   );
 }
 

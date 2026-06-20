@@ -7,6 +7,7 @@ import AdmZip from 'adm-zip';
 import { copyFile, mkdir, readdir, readFile, rm, stat } from 'node:fs/promises';
 import { dirname, join, normalize } from 'node:path';
 import type { PluginManifest } from '@nexura/types';
+import { pluginDashboardSchemaDocumentSchema } from '@nexura/types';
 import semver from 'semver';
 
 import { PluginDiscoveryService } from './plugin-discovery.service.js';
@@ -71,6 +72,7 @@ export class PluginUploadService {
       await this.validateFileTree(sourceDir);
 
       const manifest = await this.readAndValidateManifest(sourceDir);
+      await this.validateDashboardContent(sourceDir, manifest);
       const targetDir = this.getInstalledPluginDirectory(manifest.id);
 
       await this.ensureSafeInstall(targetDir, manifest);
@@ -237,6 +239,36 @@ export class PluginUploadService {
     }
 
     return manifest;
+  }
+
+  private async validateDashboardContent(sourceDir: string, manifest: PluginManifest): Promise<void> {
+    if (!manifest.dashboard?.enabled && !manifest.capabilities.dashboard) {
+      return;
+    }
+
+    const schemaPath = join(sourceDir, 'dashboard.schema.json');
+    let raw: string;
+    try {
+      raw = await readFile(schemaPath, 'utf8');
+    } catch {
+      throw new PluginOperationException(
+        'PLUGIN_DASHBOARD_CONTENT_MISSING',
+        'Plugin dashboard is enabled but dashboard.schema.json was not found.',
+        HttpStatus.BAD_REQUEST,
+        { pluginId: manifest.id },
+      );
+    }
+
+    try {
+      pluginDashboardSchemaDocumentSchema.parse(JSON.parse(raw));
+    } catch (error) {
+      throw new PluginOperationException(
+        'PLUGIN_DASHBOARD_SCHEMA_INVALID',
+        'dashboard.schema.json is not a valid Nexura dashboard schema.',
+        HttpStatus.BAD_REQUEST,
+        { pluginId: manifest.id, reason: error instanceof Error ? error.message : 'Unknown schema error.' },
+      );
+    }
   }
 
   private async ensureSafeInstall(targetDir: string, manifest: PluginManifest): Promise<void> {

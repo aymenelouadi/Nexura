@@ -14,6 +14,7 @@ import { createDefaultMessage, MessageComposer } from './components/message-comp
 import { RecentActivity } from './components/recent-activity.js';
 
 const sourceRoot = dirname(fileURLToPath(import.meta.url));
+const mockWelcomeSchemaPath = '../../../tests/fixtures/plugins/mock-welcome-plugin/dashboard.schema.json';
 
 function readSource(relativePath: string): string {
   return readFileSync(join(sourceRoot, relativePath), 'utf8');
@@ -34,20 +35,19 @@ describe('dashboard architecture boundaries', () => {
     expect(source).not.toContain('Template editor');
   });
 
-  it('renders Welcome dashboard content only from the plugin dashboard module', () => {
-    const source = readSource('plugins/welcome/welcome-dashboard.tsx');
+  it('renders mock plugin dashboard content from the plugin dashboard schema', () => {
+    const source = readSource(mockWelcomeSchemaPath);
     expect(source).toContain('Welcome messages');
     expect(source).toContain('Leave messages');
     expect(source).toContain('DM Welcome');
     expect(source).toContain('Welcome plugin logs');
   });
 
-  it('routes plugin dashboards through a registry instead of hardcoding Welcome in plugin detail page', () => {
+  it('routes plugin dashboards through schema content instead of local dynamic imports', () => {
     const detailSource = readSource('pages/plugin-detail-page.tsx');
     expect(detailSource).not.toContain("createWelcomeContentMap");
-    expect(detailSource).toContain('getPluginContentMap');
-    const registrySource = readSource('plugins/plugin-dashboard-registry.tsx');
-    expect(registrySource).toContain("pluginId: 'welcome'");
+    expect(detailSource).not.toContain('getPluginContentMap');
+    expect(detailSource).toContain('PluginSchemaDashboard');
   });
 
   it('sidebar reads plugin dashboard metadata for plugin links', () => {
@@ -72,34 +72,34 @@ describe('dashboard architecture boundaries', () => {
     expect(source).toContain("'primary' | 'secondary' | 'destructive' | 'ghost' | 'outline'");
   });
 
-  it('Welcome templates use Core UI Kit responsive primitives', () => {
-    const source = readSource('plugins/welcome/welcome-dashboard.tsx');
-    const templatesSource = source.split('function CommandsTab')[0] ?? source;
-    expect(templatesSource).toContain('PluginEditorLayout');
-    expect(templatesSource).toContain('PluginSaveBar');
-    expect(templatesSource).toContain('PluginPreviewPanel');
-    expect(templatesSource).toContain('showPreview={false}');
-    expect(templatesSource).not.toContain('grid gap-5 xl:grid-cols-[360px_1fr]');
+  it('plugin templates are declared in schema and rendered by Core primitives', () => {
+    const source = readSource(mockWelcomeSchemaPath);
+    const renderer = readSource('components/plugin-schema-dashboard.tsx');
+    expect(source).toContain('"type": "message_composer"');
+    expect(source).toContain('"type": "save_template"');
+    expect(renderer).toContain('MessageComposer');
+    expect(renderer).toContain('md:grid-cols-2');
   });
 
-  it('Welcome settings use shadcn Switch instead of handmade toggles', () => {
-    const source = readSource('plugins/welcome/welcome-dashboard.tsx');
+  it('schema renderer uses shadcn Switch instead of handmade toggles', () => {
+    const source = readSource('components/plugin-schema-dashboard.tsx');
     expect(source).toContain('<CoreSwitch');
     expect(source).not.toContain('type="checkbox"');
   });
 
-  it('Welcome settings use shadcn Select and Input for forms', () => {
-    const source = readSource('plugins/welcome/welcome-dashboard.tsx');
+  it('schema renderer uses shadcn Select and Input for forms', () => {
+    const source = readSource('components/plugin-schema-dashboard.tsx');
     expect(source).toContain('<Select');
     expect(source).toContain('<Input');
     expect(source).toContain('<Label');
   });
 
-  it('Welcome message tabs support simple and advanced modes', () => {
-    const source = readSource('plugins/welcome/welcome-dashboard.tsx');
-    expect(source).toContain('advanced');
-    expect(source).toContain('Advanced settings');
-    expect(source).toContain('Hide advanced');
+  it('plugin message tabs support dashboard-managed fields without code editing', () => {
+    const source = readSource(mockWelcomeSchemaPath);
+    expect(source).toContain('"id": "welcome"');
+    expect(source).toContain('"id": "leave"');
+    expect(source).toContain('"id": "dm"');
+    expect(source).toContain('"type": "channel_select"');
   });
 
   it('Discord preview uses real bot avatar from API', () => {
@@ -131,37 +131,37 @@ describe('dashboard architecture boundaries', () => {
     expect(source).not.toContain('welcomeVariables');
   });
 
-  it('Welcome dashboard has dynamic test send button and calls test API', () => {
-    const source = readSource('plugins/welcome/welcome-dashboard.tsx');
-    expect(source).toContain('Send test {usage} message');
-    expect(source).toContain('testGuildPluginTemplate');
+  it('plugin dashboard schema declares test send action and renderer calls test API', () => {
+    const schema = readSource(mockWelcomeSchemaPath);
+    const renderer = readSource('components/plugin-schema-dashboard.tsx');
+    expect(schema).toContain('Send test welcome message');
+    expect(renderer).toContain('testGuildPluginTemplate');
   });
 
-  it('Welcome dashboard fetches real bot profile for preview', () => {
-    const source = readSource('plugins/welcome/welcome-dashboard.tsx');
+  it('schema renderer fetches real bot profile for preview', () => {
+    const source = readSource('components/plugin-schema-dashboard.tsx');
     expect(source).toContain('botProfileQuery');
     expect(source).toContain('botProfile.data?.avatarUrl');
   });
 
-  it('Welcome dashboard supports simple mode by default and advanced toggle', () => {
-    const source = readSource('plugins/welcome/welcome-dashboard.tsx');
-    expect(source).toContain('const [advanced, setAdvanced]');
-    expect(source).toContain('Advanced settings');
-    expect(source).toContain('!advanced ?');
+  it('plugin dashboard is fully declared by schema', () => {
+    const source = readSource(mockWelcomeSchemaPath);
+    expect(source).toContain('"contentMode": "schema"');
+    expect(source).toContain('"defaults"');
+    expect(source).toContain('"defaultMessages"');
   });
 
-  it('Welcome dashboard saves both settings and template content', () => {
-    const source = readSource('plugins/welcome/welcome-dashboard.tsx');
+  it('schema renderer saves both settings and template content', () => {
+    const source = readSource('components/plugin-schema-dashboard.tsx');
     expect(source).toContain('setGuildPluginStorage');
     expect(source).toContain('saveGuildPluginTemplate');
     expect(source).toContain('toast.success');
   });
 
-  it('Welcome dashboard is responsive with no fixed wide grids', () => {
-    const source = readSource('plugins/welcome/welcome-dashboard.tsx');
+  it('schema renderer is responsive with no fixed wide grids', () => {
+    const source = readSource('components/plugin-schema-dashboard.tsx');
     expect(source).not.toContain('grid gap-5 xl:grid-cols-[360px_1fr]');
     expect(source).toContain('md:grid-cols-2');
-    expect(source).toContain('sticky bottom-0');
   });
 
   it('Settings page uses left navigation with grouped sub-pages', () => {

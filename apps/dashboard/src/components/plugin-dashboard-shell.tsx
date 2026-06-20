@@ -1,4 +1,4 @@
-import { Badge, Button, cn, Tabs, TabsList, TabsTrigger } from '@nexura/ui';
+import { Badge, Button, cn, Empty, EmptyDescription, EmptyHeader, EmptyTitle, Tabs, TabsList, TabsTrigger } from '@nexura/ui';
 import type { PluginDashboard } from '@nexura/types';
 import {
   FileClockIcon,
@@ -37,6 +37,7 @@ export interface PluginDashboardShellProps {
 }
 
 export function PluginDashboardShell({
+  pluginId,
   pluginName,
   pluginVersion,
   pluginDashboard,
@@ -48,7 +49,7 @@ export function PluginDashboardShell({
   const [activeTab, setActiveTab] = useState(tabIds[0] ?? 'overview');
 
   const tabs = tabIds.map((id) => defaultTabDefinitions[id] ?? { id, label: id, icon: <SparklesIcon className="size-4" /> });
-  const activeContent = contentMap[activeTab] ?? null;
+  const activeContent = contentMap[activeTab] ?? <MissingPluginTab pluginId={pluginId} tabId={activeTab} />;
 
   const dashboardLabel = pluginDashboard?.label ?? pluginName;
 
@@ -89,5 +90,18 @@ export function PluginDashboardShell({
 
       <section className="min-h-64">{activeContent}</section>
     </div>
+  );
+}
+
+function MissingPluginTab({ pluginId, tabId }: { pluginId: string; tabId: string }) {
+  return (
+    <Empty className="min-h-64 border-dashed border-destructive/40 bg-destructive/5">
+      <EmptyHeader>
+        <EmptyTitle className="text-base">Plugin dashboard failed to load</EmptyTitle>
+        <EmptyDescription>
+          Plugin {pluginId} did not provide content for tab {tabId}.
+        </EmptyDescription>
+      </EmptyHeader>
+    </Empty>
   );
 }

@@ -11,11 +11,13 @@ import {
   Post,
   Put,
   Req,
+  Res,
   UploadedFile,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { createReadStream, existsSync } from 'node:fs';
 import { diskStorage } from 'multer';
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
@@ -33,6 +35,7 @@ import {
   type DeletePluginRequest,
   type DuplicatePluginTemplate,
   type GuildPlugin,
+  type GuildPluginDetail,
   type GuildPluginListResponse,
   type PluginCommand,
   type PluginCommandListResponse,
@@ -47,6 +50,7 @@ import {
   type UpdatePluginLogSettings,
 } from '@nexura/types';
 import type { Request } from 'express';
+import type { Response } from 'express';
 import { z } from 'zod';
 
 import { ActivityService } from '../activity/activity.service.js';
@@ -126,6 +130,34 @@ export class PluginsController {
   ): Promise<GuildPluginListResponse> {
     await this.assertConnectedGuild(request, guildId);
     return { data: await this.pluginManager.listPlugins(guildId) };
+  }
+
+  @Get(':pluginId')
+  async getPlugin(
+    @Req() request: Request,
+    @Param('guildId', guildIdPipe) guildId: string,
+    @Param('pluginId', pluginIdPipe) pluginId: string,
+  ): Promise<GuildPluginDetail> {
+    await this.assertPluginAccess(request, guildId, pluginId);
+    return this.pluginManager.getPluginDetail(guildId, pluginId);
+  }
+
+  @Get(':pluginId/assets/:filename')
+  async servePluginAsset(
+    @Req() request: Request,
+    @Param('guildId', guildIdPipe) guildId: string,
+    @Param('pluginId', pluginIdPipe) pluginId: string,
+    @Param('filename') filename: string,
+    @Res() response: Response,
+  ): Promise<void> {
+    await this.assertPluginAccess(request, guildId, pluginId);
+    for (const filePath of this.pluginManager.getPluginAssetPath(pluginId, filename)) {
+      if (existsSync(filePath)) {
+        createReadStream(filePath).pipe(response);
+        return;
+      }
+    }
+    throw new HttpException('Plugin asset not found.', HttpStatus.NOT_FOUND);
   }
 
   @Get(':pluginId/commands')

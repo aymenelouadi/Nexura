@@ -6,6 +6,7 @@ import {
   guildListResponseSchema,
   guildPluginListResponseSchema,
   guildPluginSchema,
+  guildPluginDetailSchema,
   guildEmojiListResponseSchema,
   guildChannelListResponseSchema,
   guildPluginLogListResponseSchema,
@@ -28,6 +29,7 @@ import {
   type GuildDetail,
   type GuildListResponse,
   type GuildPlugin,
+  type GuildPluginDetail,
   type GuildPluginListResponse,
   type GuildEmojiListResponse,
   type GuildChannelListResponse,
@@ -101,6 +103,11 @@ export const api = {
     request(`/api/v1/guilds/${encodeURIComponent(guildId)}`, guildDetailSchema),
   getGuildPlugins: (guildId: string) =>
     request(`/api/v1/guilds/${encodeURIComponent(guildId)}/plugins`, guildPluginListResponseSchema),
+  getGuildPlugin: (guildId: string, pluginId: string) =>
+    request(
+      `/api/v1/guilds/${encodeURIComponent(guildId)}/plugins/${encodeURIComponent(pluginId)}`,
+      guildPluginDetailSchema,
+    ),
   uploadGuildPlugin: (guildId: string, file: File) => {
     const formData = new FormData();
     formData.append('file', file);
@@ -257,6 +264,7 @@ export const api = {
   getGuilds: () => Promise<GuildListResponse>;
   getGuild: (guildId: string) => Promise<GuildDetail>;
   getGuildPlugins: (guildId: string) => Promise<GuildPluginListResponse>;
+  getGuildPlugin: (guildId: string, pluginId: string) => Promise<GuildPluginDetail>;
   uploadGuildPlugin: (guildId: string, file: File) => Promise<GuildPlugin>;
   enableGuildPlugin: (guildId: string, pluginId: string) => Promise<GuildPlugin>;
   disableGuildPlugin: (guildId: string, pluginId: string) => Promise<GuildPlugin>;
