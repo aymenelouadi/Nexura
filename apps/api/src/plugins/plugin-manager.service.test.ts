@@ -5,19 +5,6 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { PluginManager } from './plugin-manager.service.js';
-import type { OfficialPluginRegistry } from './official-plugin.registry.js';
-
-function createOfficialRegistryMock(): OfficialPluginRegistry {
-  return {
-    isOfficial: vi.fn().mockReturnValue(false),
-    getById: vi.fn().mockReturnValue(undefined),
-    hasDashboardFallback: vi.fn().mockReturnValue(false),
-    getDashboardMode: vi.fn().mockReturnValue('none'),
-    isSupported: vi.fn().mockReturnValue(true),
-    getDashboardSchema: vi.fn().mockResolvedValue(null),
-    getExpectedManifestId: vi.fn().mockReturnValue(undefined),
-  } as unknown as OfficialPluginRegistry;
-}
 
 describe('PluginManager', () => {
   const tempPaths: string[] = [];
@@ -53,7 +40,7 @@ describe('PluginManager', () => {
       removeMissingPlugins: vi.fn().mockResolvedValue(undefined),
       registerManifest: vi.fn().mockResolvedValue(undefined),
     };
-    const manager = new PluginManager(discovery as never, repository as never, { apply: vi.fn() } as never, createOfficialRegistryMock());
+    const manager = new PluginManager(discovery as never, repository as never, { apply: vi.fn() } as never);
 
     await manager.deletePlugin('1111111111111111111', 'welcome', true);
 
@@ -116,7 +103,7 @@ describe('PluginManager', () => {
       registerManifest: vi.fn().mockResolvedValue(undefined),
       markBroken,
     };
-    const manager = new PluginManager(discovery as never, repository as never, { apply: vi.fn() } as never, createOfficialRegistryMock());
+    const manager = new PluginManager(discovery as never, repository as never, { apply: vi.fn() } as never);
 
     await manager.reloadManifests();
 
@@ -207,95 +194,7 @@ describe('PluginManager', () => {
       registerManifest: vi.fn().mockResolvedValue(undefined),
       markBroken: vi.fn().mockResolvedValue(undefined),
     };
-    const manager = new PluginManager(discovery as never, repository as never, { apply: vi.fn() } as never, createOfficialRegistryMock());
-
-    await manager.reloadManifests();
-    const detail = await manager.getPluginDetail('1111111111111111111', 'welcome');
-    expect(detail.dashboardContent.mode).toBe('schema');
-    expect(detail.dashboardContent.schema?.tabs[0]?.label).toBe('Overview');
-    expect(repository.markBroken).not.toHaveBeenCalled();
-  });
-
-  it('loads the official Welcome dashboard from the registry when no schema exists on disk', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'nexura-welcome-registry-'));
-    tempPaths.push(root);
-    const installedDir = join(root, 'installed', 'welcome');
-    await mkdir(installedDir, { recursive: true });
-
-    const manifest = {
-      id: 'welcome',
-      name: 'Welcome',
-      description: 'Greet members',
-      version: '1.0.0',
-      author: 'Nexura',
-      minCoreVersion: '0.0.0',
-      entry: 'index.js',
-      permissions: [],
-      capabilities: {
-        commands: false,
-        events: false,
-        dashboard: true,
-        database: false,
-        templates: false,
-        visualEditor: false,
-        logs: false,
-      },
-      dashboard: {
-        enabled: true,
-        route: '/plugins/welcome',
-        label: 'Welcome',
-        icon: 'Sparkles',
-        tabs: ['overview'],
-      },
-    };
-
-    const discovery = {
-      discoverManifests: vi.fn().mockResolvedValue([manifest]),
-      getInstalledPluginDirectory: vi.fn().mockReturnValue(installedDir),
-      getPluginDirectory: vi.fn().mockReturnValue(join(root, 'other')),
-      getBundledPluginDirectory: vi.fn().mockReturnValue(join(root, 'bundled', 'welcome')),
-      validateManifest: vi.fn().mockReturnValue(manifest),
-    };
-    const repository = {
-      getPlugin: vi.fn().mockResolvedValue({ id: 'welcome' }),
-      listForGuild: vi.fn().mockResolvedValue([
-        {
-          id: 'welcome',
-          name: 'Welcome',
-          version: '1.0.0',
-          description: 'Greet members',
-          author: 'Nexura',
-          status: 'INSTALLED',
-          brokenReason: null,
-          enabled: true,
-          guildStatus: 'ENABLED',
-          installedAt: '2024-01-01T00:00:00Z',
-          updatedAt: '2024-01-01T00:00:00Z',
-          dashboard: null,
-        },
-      ]),
-      setEnabled: vi.fn().mockResolvedValue(undefined),
-      writeLog: vi.fn().mockResolvedValue(undefined),
-      deletePluginData: vi.fn().mockResolvedValue(undefined),
-      deleteGuildPlugin: vi.fn().mockResolvedValue(undefined),
-      isPluginUsedByOtherGuilds: vi.fn().mockResolvedValue(false),
-      deletePluginRecord: vi.fn().mockResolvedValue(undefined),
-      removeMissingPlugins: vi.fn().mockResolvedValue(undefined),
-      registerManifest: vi.fn().mockResolvedValue(undefined),
-      markBroken: vi.fn().mockResolvedValue(undefined),
-    };
-    const registry = createOfficialRegistryMock();
-    registry.getDashboardSchema = vi.fn().mockResolvedValue({
-      version: 1,
-      contentMode: 'schema',
-      tabs: [{ id: 'overview', label: 'Overview', sections: [{ id: 'overview.summary', title: 'Welcome', fields: [], actions: [] }] }],
-      defaults: {},
-      previewVariables: {},
-      defaultMessages: {},
-    });
-    registry.isOfficial = vi.fn().mockReturnValue(true);
-    registry.hasDashboardFallback = vi.fn().mockReturnValue(true);
-    const manager = new PluginManager(discovery as never, repository as never, { apply: vi.fn() } as never, registry);
+    const manager = new PluginManager(discovery as never, repository as never, { apply: vi.fn() } as never);
 
     await manager.reloadManifests();
     const detail = await manager.getPluginDetail('1111111111111111111', 'welcome');

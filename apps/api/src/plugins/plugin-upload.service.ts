@@ -4,7 +4,7 @@ import {
   Injectable,
 } from '@nestjs/common';
 import AdmZip from 'adm-zip';
-import { copyFile, mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, readdir, readFile, rm, stat } from 'node:fs/promises';
 import { dirname, join, normalize } from 'node:path';
 import type { PluginManifest } from '@nexura/types';
 import { pluginDashboardSchemaDocumentSchema } from '@nexura/types';
@@ -226,6 +226,15 @@ export class PluginUploadService {
       throw new BadRequestException(`Plugin ID "${manifest.id}" is reserved.`);
     }
 
+    if (this.officialPluginRegistry.isOfficial(manifest.id) && !this.officialPluginRegistry.isSupported(manifest.id)) {
+      throw new PluginOperationException(
+        'PLUGIN_UNSUPPORTED_CORE_VERSION',
+        `Plugin "${manifest.id}" requires Nexura ${this.officialPluginRegistry.getById(manifest.id)?.minCoreVersion} or newer.`,
+        HttpStatus.BAD_REQUEST,
+        { pluginId: manifest.id },
+      );
+    }
+
     if (!semver.valid(manifest.version)) {
       throw new BadRequestException(`Plugin version "${manifest.version}" is not valid semver.`);
     }
@@ -280,12 +289,6 @@ export class PluginUploadService {
       raw = await readFile(schemaPath, 'utf8');
     } catch (error) {
       if (isMissingFile(error)) {
-        const fallbackSchema = await this.officialPluginRegistry.getDashboardSchema(manifest.id);
-        if (fallbackSchema) {
-          await this.writeDashboardSchema(schemaPath, fallbackSchema);
-          return;
-        }
-
         throw new PluginOperationException(
           'PLUGIN_DASHBOARD_MISSING',
           'This plugin package is incomplete. It declares a dashboard but does not include one.',
@@ -306,11 +309,6 @@ export class PluginUploadService {
         { pluginId: manifest.id, reason: error instanceof Error ? error.message : 'Unknown schema error.' },
       );
     }
-  }
-
-  private async writeDashboardSchema(schemaPath: string, schema: unknown): Promise<void> {
-    await mkdir(dirname(schemaPath), { recursive: true });
-    await writeFile(schemaPath, JSON.stringify(schema, null, 2));
   }
 
   private async ensureSafeInstall(targetDir: string, manifest: PluginManifest): Promise<void> {

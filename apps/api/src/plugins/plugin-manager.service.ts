@@ -17,7 +17,6 @@ import {
 import { readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 
-import { OfficialPluginRegistry } from './official-plugin.registry.js';
 import { PluginDiscoveryService } from './plugin-discovery.service.js';
 import { PluginMigrationService } from './plugin-migration.service.js';
 import { PluginRepository } from './plugin.repository.js';
@@ -31,7 +30,6 @@ export class PluginManager implements OnApplicationBootstrap {
     private readonly pluginDiscoveryService: PluginDiscoveryService,
     private readonly pluginRepository: PluginRepository,
     private readonly pluginMigrationService: PluginMigrationService,
-    private readonly officialPluginRegistry: OfficialPluginRegistry,
   ) {}
 
   async onApplicationBootstrap(): Promise<void> {
@@ -213,11 +211,6 @@ export class PluginManager implements OnApplicationBootstrap {
           return null;
         }
       }
-    }
-
-    const officialSchema = await this.officialPluginRegistry.getDashboardSchema(pluginId);
-    if (officialSchema) {
-      return officialSchema;
     }
 
     return null;

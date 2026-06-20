@@ -1,10 +1,7 @@
 import { Injectable } from '@nestjs/common';
-import type { PluginDashboardSchemaDocument } from '@nexura/types';
-import { pluginDashboardSchemaDocumentSchema } from '@nexura/types';
 import semver from 'semver';
 
 import { CORE_VERSION } from './plugin-discovery.service.js';
-import { welcomeDashboardSchema } from './official/welcome-dashboard.schema.js';
 
 export type OfficialDashboardMode = 'schema' | 'bundle' | 'none';
 
@@ -12,15 +9,12 @@ export interface OfficialPluginDefinition {
   id: string;
   expectedManifestId: string;
   minCoreVersion: string;
+  /** How the plugin intends to render its dashboard. Core does not implement the UI; it only routes to the plugin's own dashboard provider or schema. */
   dashboardMode: OfficialDashboardMode;
-  /** Identifier used when the dashboard is provided by a bundled renderer (future use). */
+  /** Identifier of a bundled dashboard renderer when dashboardMode is 'bundle' (future use). */
   dashboardProvider?: string;
-}
-
-interface ResolvedDashboardSchema {
-  schema: PluginDashboardSchemaDocument;
-  /** Parses once on first use and caches the validated result. */
-  parsed: PluginDashboardSchemaDocument | null;
+  /** Relative path inside the plugin package where the dashboard schema is expected. */
+  schemaPath?: string;
 }
 
 const OFFICIAL_PLUGINS: Record<string, OfficialPluginDefinition> = {
@@ -30,11 +24,8 @@ const OFFICIAL_PLUGINS: Record<string, OfficialPluginDefinition> = {
     minCoreVersion: '0.2.5',
     dashboardMode: 'schema',
     dashboardProvider: 'welcomeDashboardProvider',
+    schemaPath: 'dashboard.schema.json',
   },
-};
-
-const OFFICIAL_SCHEMAS: Record<string, ResolvedDashboardSchema> = {
-  welcome: { schema: welcomeDashboardSchema, parsed: null },
 };
 
 @Injectable()
@@ -45,14 +36,6 @@ export class OfficialPluginRegistry {
 
   getById(pluginId: string): OfficialPluginDefinition | undefined {
     return OFFICIAL_PLUGINS[pluginId];
-  }
-
-  hasDashboardFallback(pluginId: string): boolean {
-    const definition = OFFICIAL_PLUGINS[pluginId];
-    if (!definition) {
-      return false;
-    }
-    return definition.dashboardMode !== 'none';
   }
 
   getDashboardMode(pluginId: string): OfficialDashboardMode {
@@ -67,25 +50,11 @@ export class OfficialPluginRegistry {
     return semver.gte(coreVersion, definition.minCoreVersion);
   }
 
-  async getDashboardSchema(pluginId: string): Promise<PluginDashboardSchemaDocument | null> {
-    const definition = OFFICIAL_PLUGINS[pluginId];
-    if (!definition || definition.dashboardMode !== 'schema') {
-      return null;
-    }
-
-    const resolved = OFFICIAL_SCHEMAS[pluginId];
-    if (!resolved) {
-      return null;
-    }
-
-    if (!resolved.parsed) {
-      resolved.parsed = pluginDashboardSchemaDocumentSchema.parse(resolved.schema);
-    }
-
-    return resolved.parsed;
-  }
-
   getExpectedManifestId(pluginId: string): string | undefined {
     return OFFICIAL_PLUGINS[pluginId]?.expectedManifestId;
+  }
+
+  getSchemaPath(pluginId: string): string | undefined {
+    return OFFICIAL_PLUGINS[pluginId]?.schemaPath;
   }
 }

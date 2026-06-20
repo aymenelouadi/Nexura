@@ -94,11 +94,10 @@ function createMockDeps(overrides?: {
     officialPluginRegistry: {
       isOfficial: vi.fn().mockReturnValue(false),
       getById: vi.fn().mockReturnValue(undefined),
-      hasDashboardFallback: vi.fn().mockReturnValue(false),
       getDashboardMode: vi.fn().mockReturnValue('none'),
-      getDashboardSchema: vi.fn().mockResolvedValue(null),
       isSupported: vi.fn().mockReturnValue(true),
       getExpectedManifestId: vi.fn().mockReturnValue(undefined),
+      getSchemaPath: vi.fn().mockReturnValue(undefined),
     } as unknown as OfficialPluginRegistry,
   };
 }
@@ -732,7 +731,7 @@ describe('PluginUploadService', () => {
     expect(deps.pluginRepository.registerManifest).toHaveBeenCalled();
   });
 
-  it('accepts the official Welcome plugin without dashboard.schema.json using the official fallback', async () => {
+  it('rejects the official Welcome plugin when dashboard.schema.json is missing', async () => {
     const welcomeManifest = {
       id: 'welcome',
       name: 'Welcome',
@@ -767,8 +766,6 @@ describe('PluginUploadService', () => {
     tempPaths.push(dir);
 
     const deps = createMockDeps();
-    deps.officialPluginRegistry.getDashboardSchema = vi.fn().mockResolvedValue(validDashboardSchema);
-    deps.officialPluginRegistry.hasDashboardFallback = vi.fn().mockReturnValue(true);
     deps.officialPluginRegistry.isOfficial = vi.fn().mockReturnValue(true);
     const service = new PluginUploadService(
       deps.pluginDiscoveryService,
@@ -778,24 +775,30 @@ describe('PluginUploadService', () => {
       deps.officialPluginRegistry,
     );
 
-    const result = await service.upload(
-      {
-        fieldname: 'file',
-        originalname: 'welcome.nexura',
-        encoding: '7bit',
-        mimetype: 'application/octet-stream',
-        size: zip.length,
-        destination: '',
-        filename: 'welcome.nexura',
-        path: filePath,
-        buffer: zip,
+    await expect(
+      service.upload(
+        {
+          fieldname: 'file',
+          originalname: 'welcome.nexura',
+          encoding: '7bit',
+          mimetype: 'application/octet-stream',
+          size: zip.length,
+          destination: '',
+          filename: 'welcome.nexura',
+          path: filePath,
+          buffer: zip,
+        },
+        '1111111111111111111',
+      ),
+    ).rejects.toMatchObject({
+      response: {
+        error: {
+          code: 'PLUGIN_DASHBOARD_MISSING',
+          message: 'This plugin package is incomplete. It declares a dashboard but does not include one.',
+        },
       },
-      '1111111111111111111',
-    );
-
-    expect(result.id).toBe('welcome');
-    expect(deps.officialPluginRegistry.getDashboardSchema).toHaveBeenCalledWith('welcome');
-    expect(deps.pluginRepository.registerManifest).toHaveBeenCalled();
+    });
+    expect(deps.pluginRepository.registerManifest).not.toHaveBeenCalled();
   });
 
   it('does not register a plugin when validation fails', async () => {

@@ -29,17 +29,17 @@ describe('PluginTestService', () => {
 
     const repository = {
       getTemplate: vi.fn().mockResolvedValue({
-        name: 'Default Welcome',
-        type: 'welcome',
+        name: 'Default Template',
+        type: 'default',
         contentMode: 'text',
-        content: { type: 'text', content: 'Welcome [userName]!' },
+        content: { type: 'text', content: 'Hello [userName]!' },
       }),
     } as unknown as PluginCoreRepository;
 
     const service = new PluginTestService(createEnvironment('bot-token'), repository);
     const result = await service.sendTemplate(
-      { guildId: '1111111111111111111', pluginId: 'welcome' },
-      'Default Welcome',
+      { guildId: '1111111111111111111', pluginId: 'test-plugin' },
+      'Default Template',
       { channelId: '2222222222222222222' },
       { userName: 'Alice' },
     );
@@ -50,7 +50,7 @@ describe('PluginTestService', () => {
       'https://discord.com/api/v10/channels/2222222222222222222/messages',
       expect.objectContaining({
         method: 'POST',
-        body: JSON.stringify({ content: 'Welcome Alice!' }),
+        body: JSON.stringify({ content: 'Hello Alice!' }),
       }),
     );
   });
@@ -67,7 +67,7 @@ describe('PluginTestService', () => {
 
     const repository = {
       getTemplate: vi.fn().mockResolvedValue({
-        name: 'DM Welcome',
+        name: 'DM Template',
         type: 'dm',
         contentMode: 'text',
         content: { type: 'text', content: 'Hello [userName]!' },
@@ -76,8 +76,8 @@ describe('PluginTestService', () => {
 
     const service = new PluginTestService(createEnvironment('bot-token'), repository);
     const result = await service.sendTemplate(
-      { guildId: '1111111111111111111', pluginId: 'welcome' },
-      'DM Welcome',
+      { guildId: '1111111111111111111', pluginId: 'test-plugin' },
+      'DM Template',
       { userId: '3333333333333333333' },
       { userName: 'Bob' },
     );

@@ -30,15 +30,15 @@ export type MessageMode = 'text' | 'embed' | 'components_v2';
 
 export function createDefaultMessage(mode: MessageMode): CoreMessage {
   if (mode === 'embed') {
-    return { type: 'embed', title: '', description: 'Welcome [user]!', color: 0x5865f2, fields: [] };
+    return { type: 'embed', title: '', description: '', color: 0x5865f2, fields: [] };
   }
   if (mode === 'components_v2') {
     return {
       type: 'components_v2',
-      components: [{ type: 'container', spoiler: false, items: [{ type: 'text_display', content: 'Welcome [user]!' }] }],
+      components: [{ type: 'container', spoiler: false, items: [{ type: 'text_display', content: '' }] }],
     };
   }
-  return { type: 'text', content: 'Welcome [user]!' };
+  return { type: 'text', content: '' };
 }
 
 export interface MessageComposerProps {

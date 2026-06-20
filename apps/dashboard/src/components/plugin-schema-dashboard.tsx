@@ -305,7 +305,7 @@ async function runAction(action: PluginDashboardAction, context: SchemaRenderCon
     return;
   }
   if (action.type === 'test_template') {
-    const name = String(getValueAtPath(context.draft.settings, action.templateNamePath ?? '') ?? 'Default Welcome');
+    const name = String(getValueAtPath(context.draft.settings, action.templateNamePath ?? '') ?? 'Template');
     const channelId = getValueAtPath(context.draft.settings, action.channelIdPath ?? '');
     await api.testGuildPluginTemplate(context.guildId, context.pluginId, name, {
       ...(typeof channelId === 'string' ? { channelId } : {}),
