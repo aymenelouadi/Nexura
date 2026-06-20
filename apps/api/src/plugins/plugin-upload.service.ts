@@ -238,7 +238,41 @@ export class PluginUploadService {
       throw new BadRequestException(`Plugin entry "${manifest.entry}" was not found.`);
     }
 
+    await this.validateRuntimeEntry(sourceDir, manifest);
+
     return manifest;
+  }
+
+  private async validateRuntimeEntry(sourceDir: string, manifest: PluginManifest): Promise<void> {
+    const jsEntry = manifest.entry.replace(/\.ts$/u, '.js');
+    const candidates = [
+      join(sourceDir, 'dist', jsEntry),
+      join(sourceDir, jsEntry),
+    ];
+
+    for (const candidate of candidates) {
+      try {
+        const s = await stat(candidate);
+        if (s.isFile()) {
+          return;
+        }
+      } catch {
+        // continue to next candidate
+      }
+    }
+
+    // If entry is .ts and we haven't found a .js counterpart, reject to avoid
+    // runtime failures in production where Node cannot execute TypeScript directly.
+    if (manifest.entry.endsWith('.ts')) {
+      throw new BadRequestException(
+        `Plugin entry "${manifest.entry}" is TypeScript but no compiled JavaScript was found. ` +
+          `Checked: ${candidates.join(', ')}. Please build the plugin before packaging and include the dist/ folder.`,
+      );
+    }
+
+    throw new BadRequestException(
+      `Plugin runtime entry was not found. Checked: ${candidates.join(', ')}.`,
+    );
   }
 
   private async validateDashboardContent(sourceDir: string, manifest: PluginManifest): Promise<void> {

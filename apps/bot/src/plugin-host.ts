@@ -1,4 +1,5 @@
-import { readFile, readdir } from 'node:fs/promises';
+import { readFile, readdir, stat } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
@@ -22,13 +23,7 @@ import type { Logger } from 'pino';
 import { BotPluginContextFactory } from './plugin-core-adapters.js';
 import type { BotPluginRuntime } from './plugin-runtime-bridge.js';
 
-const PLUGINS_DIRECTORY = resolve(
-  dirname(new URL(import.meta.url).pathname),
-  '..',
-  '..',
-  '..',
-  'plugins',
-);
+const PLUGINS_DIRECTORY = resolveWorkspacePath('plugins');
 const INSTALLED_PLUGINS_DIRECTORY = join(PLUGINS_DIRECTORY, 'installed');
 
 interface LoadedPlugin {
@@ -56,6 +51,10 @@ export class PluginHost {
   }
 
   async start(): Promise<void> {
+    this.logger.info(
+      { pluginsDir: PLUGINS_DIRECTORY, installedDir: INSTALLED_PLUGINS_DIRECTORY },
+      'Plugin host starting',
+    );
     await this.loadModules();
     await this.refresh();
     this.refreshTimer = setInterval(() => {
@@ -87,24 +86,40 @@ export class PluginHost {
   }
 
   private async loadModules(): Promise<void> {
-    for (const directory of await listPluginDirectories()) {
-      const manifest = pluginManifestSchema.parse(
-        JSON.parse(await readFile(join(directory, 'plugin.json'), 'utf8')) as unknown,
-      );
-      if (this.loaded.has(manifest.id)) {
-        continue;
+    const directories = await listPluginDirectories(this.logger);
+    let loadedNow = 0;
+    let skipped = 0;
+    for (const directory of directories) {
+      try {
+        const manifestRaw = JSON.parse(await readFile(join(directory, 'plugin.json'), 'utf8')) as unknown;
+        const manifest = pluginManifestSchema.parse(manifestRaw);
+        if (this.loaded.has(manifest.id)) {
+          continue;
+        }
+        const runtimePath = await resolveRuntimePath(directory, manifest.entry);
+        const imported = (await import(pathToFileURL(runtimePath).href)) as {
+          default?: PluginModule;
+        };
+        if (!imported.default) {
+          throw new Error(`Plugin ${manifest.id} does not export a default PluginModule.`);
+        }
+        this.registry.register(manifest.id, imported.default);
+        this.loaded.set(manifest.id, { manifest, module: imported.default });
+        loadedNow += 1;
+      } catch (error) {
+        skipped += 1;
+        const err = error instanceof Error ? error.message : String(error);
+        const code = error instanceof Error && 'code' in error ? (error as Error & { code: string }).code : undefined;
+        this.logger.warn(
+          { directory, err, code },
+          'Plugin runtime module skipped',
+        );
       }
-      const runtimePath = join(directory, 'dist', manifest.entry.replace(/\.ts$/u, '.js'));
-      const imported = (await import(pathToFileURL(runtimePath).href)) as {
-        default?: PluginModule;
-      };
-      if (!imported.default) {
-        throw new Error(`Plugin ${manifest.id} does not export a default PluginModule.`);
-      }
-      this.registry.register(manifest.id, imported.default);
-      this.loaded.set(manifest.id, { manifest, module: imported.default });
     }
-    this.logger.info({ count: this.loaded.size }, 'Plugin runtime modules loaded');
+    this.logger.info(
+      { count: this.loaded.size, scanned: directories.length, loadedNow, skipped, pluginsDir: PLUGINS_DIRECTORY, installedDir: INSTALLED_PLUGINS_DIRECTORY },
+      'Plugin runtime modules loaded',
+    );
   }
 
   private async refresh(): Promise<void> {
@@ -191,22 +206,72 @@ function toDiscordOptionType(type: 'STRING' | 'BOOLEAN' | 'INTEGER'): Applicatio
   return ApplicationCommandOptionType.String;
 }
 
-async function listPluginDirectories(): Promise<string[]> {
-  const officialDirectories = await listChildDirectories(PLUGINS_DIRECTORY, new Set(['installed']));
-  const installedDirectories = await listChildDirectories(INSTALLED_PLUGINS_DIRECTORY);
-  return [...new Set([...officialDirectories, ...installedDirectories])].sort();
+async function listPluginDirectories(logger: Logger): Promise<string[]> {
+  const officialDirectories = await listChildDirectories(PLUGINS_DIRECTORY, new Set(['installed']), logger);
+  const installedDirectories = await listChildDirectories(INSTALLED_PLUGINS_DIRECTORY, new Set(), logger);
+  const combined = [...new Set([...officialDirectories, ...installedDirectories])].sort();
+  logger.info(
+    { officialCount: officialDirectories.length, installedCount: installedDirectories.length, total: combined.length },
+    'Plugin directories discovered',
+  );
+  return combined;
 }
 
-async function listChildDirectories(root: string, exclude = new Set<string>()): Promise<string[]> {
+async function resolveRuntimePath(pluginDirectory: string, entry: string): Promise<string> {
+  const jsEntry = entry.replace(/\.ts$/u, '.js');
+  const candidates = [
+    join(pluginDirectory, 'dist', jsEntry),
+    join(pluginDirectory, jsEntry),
+    join(pluginDirectory, entry),
+  ];
+
+  for (const candidate of candidates) {
+    try {
+      if ((await stat(candidate)).isFile()) {
+        return candidate;
+      }
+    } catch (error) {
+      if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) {
+        throw error;
+      }
+    }
+  }
+
+  throw new Error(`Plugin runtime entry was not found. Checked: ${candidates.join(', ')}`);
+}
+
+async function listChildDirectories(root: string, exclude = new Set<string>(), logger?: Logger): Promise<string[]> {
   try {
     const entries = await readdir(root, { withFileTypes: true });
-    return entries
+    const dirs = entries
       .filter((entry) => entry.isDirectory() && !exclude.has(entry.name))
       .map((entry) => join(root, entry.name));
+    logger?.debug({ root, found: dirs.length }, 'Scanned plugin directory');
+    return dirs;
   } catch (error) {
     if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
+      logger?.debug({ root }, 'Plugin directory does not exist');
       return [];
     }
     throw error;
   }
+}
+
+function resolveWorkspacePath(...segments: string[]): string {
+  const envRoot = process.env.NEXURA_ROOT;
+  if (envRoot) {
+    return resolve(envRoot, ...segments);
+  }
+
+  let current = process.cwd();
+  for (let depth = 0; depth < 6; depth += 1) {
+    if (existsSync(join(current, 'pnpm-workspace.yaml')) || existsSync(join(current, 'turbo.json'))) {
+      return resolve(current, ...segments);
+    }
+    const parent = dirname(current);
+    if (parent === current) break;
+    current = parent;
+  }
+
+  return resolve(dirname(new URL(import.meta.url).pathname), '..', '..', '..', ...segments);
 }

@@ -1,4 +1,5 @@
 import { readFile, readdir } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -6,14 +7,7 @@ import { Injectable } from '@nestjs/common';
 import { pluginManifestSchema, type PluginManifest } from '@nexura/types';
 
 export const CORE_VERSION = '0.2.5';
-const PLUGIN_DIRECTORY = resolve(
-  dirname(fileURLToPath(import.meta.url)),
-  '..',
-  '..',
-  '..',
-  '..',
-  'plugins',
-);
+const PLUGIN_DIRECTORY = resolveWorkspacePath('plugins');
 const INSTALLED_PLUGIN_DIRECTORY = join(PLUGIN_DIRECTORY, 'installed');
 
 @Injectable()
@@ -104,4 +98,23 @@ function getVersionParts(version: string): [number, number, number] {
 
 function isMissingDirectory(error: unknown): boolean {
   return error instanceof Error && 'code' in error && error.code === 'ENOENT';
+}
+
+function resolveWorkspacePath(...segments: string[]): string {
+  const envRoot = process.env.NEXURA_ROOT;
+  if (envRoot) {
+    return resolve(envRoot, ...segments);
+  }
+
+  let current = process.cwd();
+  for (let depth = 0; depth < 6; depth += 1) {
+    if (existsSync(join(current, 'pnpm-workspace.yaml')) || existsSync(join(current, 'turbo.json'))) {
+      return resolve(current, ...segments);
+    }
+    const parent = dirname(current);
+    if (parent === current) break;
+    current = parent;
+  }
+
+  return resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '..', ...segments);
 }
