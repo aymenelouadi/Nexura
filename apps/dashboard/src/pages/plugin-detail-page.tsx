@@ -139,9 +139,9 @@ export function PluginDetailPage() {
       )
     : {};
   const contentMap: Record<string, ReactNode> = {
+    ...schemaContentMap,
     overview: isLogsPlugin ? <LogsPluginDashboard guildId={guildId} plugin={plugin} /> : <OverviewPlaceholder plugin={plugin} />,
     settings: <SettingsPlaceholder plugin={plugin} />,
-    ...schemaContentMap,
     commands: schemaContentMap.commands ?? <CommandsPlaceholder plugin={plugin} />,
     logs: <PluginLogsTab guildId={guildId} pluginId={pluginId} />,
   };

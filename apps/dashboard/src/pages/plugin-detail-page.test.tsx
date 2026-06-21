@@ -19,6 +19,52 @@ vi.mock('sonner', () => ({
 
 const guildId = '1111111111111111111';
 
+const logsPlugin: GuildPluginDetail = {
+  id: 'logs',
+  name: 'Logs',
+  description: 'Monitor important server activity with clean, customizable logs.',
+  version: '1.0.0',
+  author: 'Nexura',
+  status: 'INSTALLED',
+  brokenReason: null,
+  enabled: true,
+  guildStatus: 'ENABLED',
+  installedAt: '2024-01-01T00:00:00Z',
+  updatedAt: '2024-01-01T00:00:00Z',
+  dashboard: {
+    enabled: true,
+    route: '/plugins/logs',
+    label: 'Logs',
+    icon: 'ScrollText',
+    tabs: ['overview', 'settings', 'member-logs', 'moderation-logs', 'message-logs', 'server-logs'],
+  },
+  dashboardContent: {
+    mode: 'schema',
+    bundleUrl: null,
+    assetsBaseUrl: `/api/v1/guilds/${guildId}/plugins/logs/assets`,
+    errors: [],
+    schema: {
+      version: 1,
+      contentMode: 'schema',
+      defaults: {
+        'settings.enabled': true,
+        'settings.defaultChannelId': null,
+        'settings.defaultFormat': 'embed',
+        'settings.defaultColor': 5793266,
+      },
+      previewVariables: { user: '@Mira', serverName: 'Nexura Labs' },
+      defaultMessages: {},
+      tabs: [
+        {
+          id: 'overview',
+          label: 'Overview',
+          sections: [{ id: 'overview.logs', title: 'Logs', fields: [], actions: [] }],
+        },
+      ],
+    },
+  },
+};
+
 const welcomePlugin: GuildPluginDetail = {
   id: 'welcome',
   name: 'Welcome',
@@ -189,6 +235,17 @@ describe('PluginDetailPage', () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+  });
+
+  it('renders custom Logs dashboard instead of schema "No settings"', async () => {
+    vi.mocked(api.getGuildPlugin).mockResolvedValue(logsPlugin);
+    renderPage(<PluginDetailPage />);
+
+    expect(await screen.findByRole('heading', { name: 'Logs Plugin' }, { timeout: 5000 })).toBeInTheDocument();
+    expect(screen.getByText('Quick setup')).toBeInTheDocument();
+    expect(screen.getByText('Log types')).toBeInTheDocument();
+    expect(screen.queryByText('No settings')).not.toBeInTheDocument();
+    expect(screen.queryByText('This section does not have any configurable settings.')).not.toBeInTheDocument();
   });
 
   it('renders Welcome tab content from dashboard schema', async () => {
