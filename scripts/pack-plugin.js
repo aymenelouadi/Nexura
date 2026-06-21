@@ -32,6 +32,9 @@ if (!fs.existsSync(manifestPath)) {
 }
 
 const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
+const runtimeEntry = manifest.entry && manifest.entry.endsWith('.ts')
+  ? path.posix.join('dist', manifest.entry.replace(/\.ts$/u, '.js'))
+  : manifest.entry;
 
 // Validate manifest
 if (!manifest.id || !manifest.version || !manifest.entry) {
@@ -93,6 +96,7 @@ const requiredFiles = [
   'plugin.json',
   'package.json',
   manifest.entry,
+  runtimeEntry,
 ];
 
 const optionalIncludes = [
@@ -115,7 +119,6 @@ const excludePatterns = [
   'node_modules',
   '.git',
   '.turbo',
-  'dist',
   '.env',
   '.env.*',
   '*.log',

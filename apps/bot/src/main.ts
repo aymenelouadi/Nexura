@@ -1,6 +1,6 @@
 import { createDatabase } from '@nexura/database';
 import { parseBotEnvironment } from '@nexura/shared';
-import { Client, GatewayIntentBits } from 'discord.js';
+import { Client, GatewayIntentBits, Partials } from 'discord.js';
 import pino, { type LoggerOptions } from 'pino';
 
 import { GuildStore } from './guild-store.js';
@@ -21,14 +21,17 @@ async function bootstrap(): Promise<void> {
   const logger = pino(loggerOptions);
   try {
     const { db, pool } = createDatabase(environment.DATABASE_URL);
-    const intents = [GatewayIntentBits.Guilds, GatewayIntentBits.GuildInvites];
+    const intents = [GatewayIntentBits.Guilds, GatewayIntentBits.GuildInvites, GatewayIntentBits.GuildMessages];
     if (environment.DISCORD_GUILD_MEMBERS_INTENT) {
       intents.push(GatewayIntentBits.GuildMembers);
     }
     if (environment.DISCORD_MESSAGE_CONTENT_INTENT) {
-      intents.push(GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent);
+      intents.push(GatewayIntentBits.MessageContent);
     }
-    const client = new Client({ intents });
+    const client = new Client({ intents, partials: [Partials.Message, Partials.Channel] });
+    if (!environment.DISCORD_MESSAGE_CONTENT_INTENT) {
+      logger.warn('DISCORD_MESSAGE_CONTENT_INTENT is disabled; message log content may be unavailable.');
+    }
 
     registerCoreEvents(client, new GuildStore(db), logger);
     const pluginRuntime = createBotPluginRuntime(db);

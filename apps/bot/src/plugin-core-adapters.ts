@@ -47,7 +47,7 @@ import {
   type VisualEditorElement,
   type VisualEditorLayout,
 } from '@nexura/types';
-import type { Client, Guild } from 'discord.js';
+import { PermissionFlagsBits, type Client, type Guild } from 'discord.js';
 import { and, desc, eq, like } from 'drizzle-orm';
 
 import { toDiscordReply } from './discord-message.js';
@@ -488,6 +488,16 @@ class DiscordPluginMessages implements PluginMessages {
     const channel = await this.client.channels.fetch(channelId);
     if (!channel?.isSendable()) {
       throw new Error(`Discord channel ${channelId} is not sendable.`);
+    }
+    const permissions = 'permissionsFor' in channel && this.client.user ? channel.permissionsFor(this.client.user) : null;
+    if (permissions && !permissions.has(PermissionFlagsBits.ViewChannel)) {
+      throw new Error(`Missing View Channel permission for Discord channel ${channelId}.`);
+    }
+    if (permissions && !permissions.has(PermissionFlagsBits.SendMessages)) {
+      throw new Error(`Missing Send Messages permission for Discord channel ${channelId}.`);
+    }
+    if (message.type === 'embed' && permissions && !permissions.has(PermissionFlagsBits.EmbedLinks)) {
+      throw new Error(`Missing Embed Links permission for Discord channel ${channelId}.`);
     }
     const sent = await channel.send(toDiscordReply(message));
     return { id: sent.id, channelId: sent.channelId };

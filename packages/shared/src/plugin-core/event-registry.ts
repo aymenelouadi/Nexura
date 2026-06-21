@@ -35,7 +35,7 @@ export class EventRegistry {
     const subscriptions = [...(this.subscriptions.get(event) ?? [])];
     await Promise.all(
       subscriptions.map(async (subscription) => {
-        if (payload.guildId && payload.guildId !== subscription.guildId) {
+        if (!payload.guildId || payload.guildId !== subscription.guildId) {
           return;
         }
         if (!(await this.pluginState.isEnabled(subscription))) {

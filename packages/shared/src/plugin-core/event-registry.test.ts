@@ -18,6 +18,16 @@ describe('EventRegistry', () => {
     expect(handler).toHaveBeenCalledOnce();
   });
 
+  it('does not dispatch guild-scoped subscriptions when guildId is missing', async () => {
+    const registry = new EventRegistry(createPluginState());
+    const handler = vi.fn();
+    registry.on(scope, 'messageDelete', handler, createLogger());
+
+    await registry.dispatch('messageDelete', { messageId: 'message' });
+
+    expect(handler).not.toHaveBeenCalled();
+  });
+
   it('blocks events for disabled plugins', async () => {
     const registry = new EventRegistry(createPluginState(false));
     const handler = vi.fn();
