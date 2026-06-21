@@ -15,7 +15,6 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-  Separator,
   Sheet,
   SheetContent,
   SheetDescription,
@@ -371,8 +370,8 @@ export function LogsPluginDashboard({ guildId, plugin }: { guildId: string; plug
       const log = logDefinitions.find((candidate) => candidate.id === logId);
       if (!log) throw new Error('Log type not found');
       const config = resolveLogConfig(settings, log);
-      const message = buildPreviewMessage(log, config, settings, true);
-      return api.testGuildPluginLog(guildId, plugin.id, { channelId, message });
+      const { message, allowedMentions } = buildPreviewMessage(log, config, settings, true);
+      return api.testGuildPluginLog(guildId, plugin.id, { channelId, message, allowedMentions });
     },
     onSuccess: () => toast.success('Test log sent to the channel.'),
     onError: (error) => {
@@ -388,8 +387,8 @@ export function LogsPluginDashboard({ guildId, plugin }: { guildId: string; plug
   });
 
   if (storage.isLoading || channels.isLoading) return <Skeleton className="h-96 w-full" />;
-  if (storage.isError) return <ErrorState message={(storage.error as Error).message} onRetry={() => void storage.refetch()} />;
-  if (channels.isError) return <ErrorState message={(channels.error as Error).message} onRetry={() => void channels.refetch()} />;
+  if (storage.isError) return <ErrorState message={storage.error.message} onRetry={() => void storage.refetch()} />;
+  if (channels.isError) return <ErrorState message={channels.error.message} onRetry={() => void channels.refetch()} />;
 
   const channelList = channels.data?.data ?? [];
   const activeCount = logDefinitions.filter((log) => resolveLogConfig(settings, log).enabled).length;
@@ -455,30 +454,30 @@ export function LogsPluginDashboard({ guildId, plugin }: { guildId: string; plug
         <HealthTile
           label="Active logs"
           value={`${activeCount}/${logDefinitions.length}`}
-          ready={activeCount > 0}
+          status={activeCount > 0 ? 'success' : 'warning'}
           icon={LayoutTemplateIcon}
           description={activeCount > 0 ? 'Logs are enabled' : 'No logs enabled'}
         />
         <HealthTile
           label="Default channel"
           value={defaultChannel ? `#${defaultChannel.name}` : 'Missing'}
-          ready={Boolean(defaultChannel)}
+          status={defaultChannel ? 'success' : 'error'}
           icon={defaultChannel ? CheckCircle2Icon : AlertTriangleIcon}
           description={defaultChannel ? 'Logs have a destination' : 'Choose a channel'}
         />
         <HealthTile
           label="Message style"
           value={labelFormat(settings.defaultFormat)}
-          ready
+          status="success"
           icon={Settings2Icon}
           description="Default output format"
         />
         <HealthTile
           label="Status"
-          value={defaultChannel ? 'Ready' : 'Setup needed'}
-          ready={Boolean(defaultChannel)}
-          icon={defaultChannel ? CheckCircle2Icon : AlertTriangleIcon}
-          description={defaultChannel ? 'You can enable logs' : 'Finish quick setup'}
+          value={settings.enabled && defaultChannel ? 'Ready' : 'Setup needed'}
+          status={settings.enabled && defaultChannel ? 'success' : defaultChannel ? 'warning' : 'error'}
+          icon={settings.enabled && defaultChannel ? CheckCircle2Icon : AlertTriangleIcon}
+          description={settings.enabled && defaultChannel ? 'Logging is active' : defaultChannel ? 'Enable the plugin' : 'Finish quick setup'}
         />
       </section>
 
@@ -566,22 +565,28 @@ export function LogsPluginDashboard({ guildId, plugin }: { guildId: string; plug
 function HealthTile({
   label,
   value,
-  ready,
+  status,
   icon: Icon,
   description,
 }: {
   label: string;
   value: string;
-  ready: boolean;
+  status: 'success' | 'warning' | 'error';
   icon: ComponentType<SVGProps<SVGSVGElement>>;
   description: string;
 }) {
+  const statusClass =
+    status === 'success'
+      ? 'bg-success/10 text-success'
+      : status === 'warning'
+        ? 'bg-warning/10 text-warning'
+        : 'bg-destructive/10 text-destructive';
   return (
     <Card className="gap-0 py-0">
       <CardContent className="flex min-h-28 flex-col justify-between p-4">
         <div className="flex items-center justify-between gap-3">
           <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">{label}</p>
-          <span className={`flex size-8 items-center justify-center rounded-md ${ready ? 'bg-success/10 text-success' : 'bg-warning/10 text-warning'}`}>
+          <span className={`flex size-8 items-center justify-center rounded-md ${statusClass}`}>
             <Icon className="size-4" />
           </span>
         </div>
@@ -745,7 +750,7 @@ function LogCustomizeSheet({
   channels,
   botName,
   botAvatarUrl,
-  focusedField,
+  focusedField: _focusedField,
   onFocusField,
   onInsertVariable,
   onUpdateLog,
@@ -938,7 +943,7 @@ function LivePreviewCard({
   botAvatarUrl: string | null | undefined;
 }) {
   const config = resolveLogConfig(settings, log);
-  const message = buildPreviewMessage(log, config, settings, false);
+  const { message } = buildPreviewMessage(log, config, settings, false);
   const isComponents = message.type === 'components_v2';
 
   return (
@@ -1057,12 +1062,18 @@ function ColorControl({ label, value, onChange }: { label: string; value: number
   );
 }
 
-function buildPreviewMessage(log: LogDefinition, config: ResolvedLogConfig, settings: LogsSettings, isTest: boolean): CoreMessage {
+interface PreviewResult {
+  message: CoreMessage;
+  allowedMentions: { parse: string[]; users: string[]; roles: string[] };
+}
+
+function buildPreviewMessage(log: LogDefinition, config: ResolvedLogConfig, settings: LogsSettings, isTest: boolean): PreviewResult {
   const title = renderTemplate(config.title, log.sample);
   const description = renderTemplate(config.description, log.sample);
   const footerText = renderTemplate(config.footer, log.sample);
   const testPrefix = isTest ? '[TEST] ' : '';
   const fields = getLogFields(log, log.sample);
+  const allowedMentions = computePreviewAllowedMentions(log.sample);
 
   if (config.format === 'components_v2') {
     const items: ComponentsV2Item[] = [];
@@ -1079,7 +1090,7 @@ function buildPreviewMessage(log: LogDefinition, config: ResolvedLogConfig, sett
       items.push({ type: 'text_display', content: `${footerText}${footerText && config.showTimestamp ? ' • ' : ''}${config.showTimestamp ? 'Today at 12:30' : ''}` });
     }
     const container: ComponentsV2Container = { type: 'container', spoiler: false, items };
-    return { type: 'components_v2', components: [container] };
+    return { message: { type: 'components_v2', components: [container] }, allowedMentions };
   }
 
   const message: EmbedMessage = {
@@ -1095,7 +1106,19 @@ function buildPreviewMessage(log: LogDefinition, config: ResolvedLogConfig, sett
   if (footerText || config.showTimestamp) {
     message.footer = { text: `${footerText}${footerText && config.showTimestamp ? ' • ' : ''}${config.showTimestamp ? 'Today at 12:30' : ''}`, iconSource: 'none' };
   }
-  return message;
+  return { message, allowedMentions };
+}
+
+function computePreviewAllowedMentions(sample: Record<string, string>): { parse: string[]; users: string[]; roles: string[] } {
+  const users: string[] = [];
+  const roles: string[] = [];
+  const userId = sample['user.id'];
+  const executorId = sample['executor.id'];
+  const roleId = sample['role.id'];
+  if (userId && /^\d{17,20}$/.test(userId)) users.push(userId);
+  if (executorId && /^\d{17,20}$/.test(executorId)) users.push(executorId);
+  if (roleId && /^\d{17,20}$/.test(roleId)) roles.push(roleId);
+  return { parse: [], users: Array.from(new Set(users)), roles: Array.from(new Set(roles)) };
 }
 
 function getLogFields(log: LogDefinition, sample: Record<string, string>): LogField[] {
@@ -1156,7 +1179,7 @@ function getStoredLogConfig(settings: LogsSettings, logId: string): LogTypeConfi
   const categoryValue: Record<string, unknown> = isRecord(rawCategory) ? rawCategory : {};
   const rawValue = categoryValue[name!];
   const value = isRecord(rawValue) ? rawValue : {};
-  return value as LogTypeConfig;
+  return value;
 }
 
 function setLogConfig(settings: LogsSettings, logId: string, config: LogTypeConfig): LogsSettings {

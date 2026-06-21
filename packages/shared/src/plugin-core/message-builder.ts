@@ -4,7 +4,8 @@ import type { PluginComponents, PluginEmbeds, PluginMessages } from '../plugin-c
 
 export const pluginMessages: PluginMessages = {
   build: (input) => coreMessageSchema.parse(input),
-  sendChannel: () => Promise.reject(new Error('Message delivery adapter is not configured.')),
+  sendChannel: (_channelId, _message, _options?) =>
+    Promise.reject(new Error('Message delivery adapter is not configured.')),
   sendDirect: () => Promise.reject(new Error('Message delivery adapter is not configured.')),
   sendVisualCard: () =>
     Promise.reject(new Error('Visual card delivery adapter is not configured.')),

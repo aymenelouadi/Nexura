@@ -3,7 +3,7 @@ import { existsSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-import { guildPlugins, type Database } from '@nexura/database';
+import { guildPlugins, plugins, type Database } from '@nexura/database';
 import {
   PluginRegistry,
   PluginRuntime,
@@ -86,14 +86,20 @@ export class PluginHost {
   }
 
   private async loadModules(): Promise<void> {
+    const registered = await this.getRegisteredPluginIds();
     const directories = await listPluginDirectories(this.logger);
     let loadedNow = 0;
     let skipped = 0;
+    let unregistered = 0;
     for (const directory of directories) {
       try {
         const manifestRaw = JSON.parse(await readFile(join(directory, 'plugin.json'), 'utf8')) as unknown;
         const manifest = pluginManifestSchema.parse(manifestRaw);
         if (this.loaded.has(manifest.id)) {
+          continue;
+        }
+        if (!registered.has(manifest.id)) {
+          unregistered += 1;
           continue;
         }
         const runtimePath = await resolveRuntimePath(directory, manifest.entry);
@@ -117,9 +123,25 @@ export class PluginHost {
       }
     }
     this.logger.info(
-      { count: this.loaded.size, scanned: directories.length, loadedNow, skipped, pluginsDir: PLUGINS_DIRECTORY, installedDir: INSTALLED_PLUGINS_DIRECTORY },
+      { count: this.loaded.size, scanned: directories.length, loadedNow, skipped, unregistered, pluginsDir: PLUGINS_DIRECTORY, installedDir: INSTALLED_PLUGINS_DIRECTORY },
       'Plugin runtime modules loaded',
     );
+  }
+
+  private async getRegisteredPluginIds(): Promise<Set<string>> {
+    try {
+      const rows = await this.database
+        .select({ id: plugins.id })
+        .from(plugins)
+        .where(eq(plugins.status, 'INSTALLED'));
+      return new Set(rows.map((row) => row.id));
+    } catch (error) {
+      this.logger.warn(
+        { err: error instanceof Error ? error.message : String(error) },
+        'Failed to query registered plugin IDs; loading no modules to avoid errors',
+      );
+      return new Set();
+    }
   }
 
   private async refresh(): Promise<void> {

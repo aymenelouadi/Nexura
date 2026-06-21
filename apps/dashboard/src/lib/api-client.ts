@@ -27,7 +27,6 @@ import {
   type AppSettings,
   type AppSettingsSectionId,
   type BotProfile,
-  type CoreMessage,
   type GuildDetail,
   type GuildListResponse,
   type GuildPlugin,

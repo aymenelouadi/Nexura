@@ -21,6 +21,7 @@ import {
   VariableRegistry,
   pluginComponents,
   pluginEmbeds,
+  type AllowedMentions,
   type CommandConfigurationReader,
   type CommandCustomization,
   type CommandRegistration,
@@ -484,7 +485,11 @@ class DiscordPluginMessages implements PluginMessages {
     return coreMessageSchema.parse(input);
   }
 
-  async sendChannel(channelId: string, message: CoreMessage): Promise<PluginMessageReceipt> {
+  async sendChannel(
+    channelId: string,
+    message: CoreMessage,
+    options?: { allowedMentions?: AllowedMentions },
+  ): Promise<PluginMessageReceipt> {
     const channel = await this.client.channels.fetch(channelId);
     if (!channel?.isSendable()) {
       throw new Error(`Discord channel ${channelId} is not sendable.`);
@@ -499,7 +504,18 @@ class DiscordPluginMessages implements PluginMessages {
     if (message.type === 'embed' && permissions && !permissions.has(PermissionFlagsBits.EmbedLinks)) {
       throw new Error(`Missing Embed Links permission for Discord channel ${channelId}.`);
     }
-    const sent = await channel.send(toDiscordReply(message));
+    const discordReply = toDiscordReply(message);
+    const allowedMentions = options?.allowedMentions;
+    const sent = await channel.send({
+      ...discordReply,
+      allowedMentions: allowedMentions
+        ? {
+            parse: allowedMentions.parse as Array<'roles' | 'users' | 'everyone'>,
+            users: allowedMentions.users,
+            roles: allowedMentions.roles,
+          }
+        : { parse: [] },
+    });
     return { id: sent.id, channelId: sent.channelId };
   }
 

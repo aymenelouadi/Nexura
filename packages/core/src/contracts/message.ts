@@ -1,13 +1,23 @@
+import type { ComponentsV2Message, CoreMessage, EmbedMessage } from '@nexura/types';
+
 export interface PluginMessageReceipt {
   id: string;
   channelId: string;
 }
 
-import type { ComponentsV2Message, CoreMessage, EmbedMessage } from '@nexura/types';
+export interface AllowedMentions {
+  parse: string[];
+  users: string[];
+  roles: string[];
+}
 
 export interface PluginMessages {
   build(input: unknown): CoreMessage;
-  sendChannel(channelId: string, message: CoreMessage): Promise<PluginMessageReceipt>;
+  sendChannel(
+    channelId: string,
+    message: CoreMessage,
+    options?: { allowedMentions?: AllowedMentions },
+  ): Promise<PluginMessageReceipt>;
   sendDirect(userId: string, message: CoreMessage): Promise<PluginMessageReceipt>;
   sendVisualCard(
     channelId: string,

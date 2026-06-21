@@ -39,7 +39,7 @@ export class PluginTestService {
 
   async sendMessage(scope: PluginScope, request: PluginTestLogRequest): Promise<PluginTestResult> {
     void scope;
-    const payload = toDiscordApiPayload(request.message);
+    const payload = toDiscordApiPayload(request.message, request.allowedMentions);
     const result = await this.sendToChannel(request.channelId, payload);
     return { success: true, messageId: result.id, channelId: request.channelId };
   }

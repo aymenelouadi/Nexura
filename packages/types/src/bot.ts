@@ -42,6 +42,14 @@ export const pluginTestLogRequestSchema = z
   .object({
     channelId: z.string().min(1).max(64),
     message: coreMessageSchema,
+    allowedMentions: z
+      .object({
+        parse: z.array(z.string()).default([]),
+        users: z.array(z.string()).default([]),
+        roles: z.array(z.string()).default([]),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 

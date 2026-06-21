@@ -11,18 +11,27 @@ export interface DiscordApiMessage {
   embeds?: unknown[];
   components?: unknown[];
   flags?: number;
+  allowed_mentions?: {
+    parse: string[];
+    users: string[];
+    roles: string[];
+  };
 }
 
 const COMPONENTS_V2_FLAG = 1 << 15;
 
-export function toDiscordApiPayload(message: CoreMessage): DiscordApiMessage {
+export function toDiscordApiPayload(
+  message: CoreMessage,
+  allowedMentions?: { parse: string[]; users: string[]; roles: string[] },
+): DiscordApiMessage {
+  const base: DiscordApiMessage = allowedMentions ? { allowed_mentions: allowedMentions } : {};
   if (message.type === 'text') {
-    return { content: message.content };
+    return { ...base, content: message.content };
   }
   if (message.type === 'embed') {
-    return { embeds: [buildDiscordEmbed(message)] };
+    return { ...base, embeds: [buildDiscordEmbed(message)] };
   }
-  return buildComponentsV2Payload(message);
+  return { ...base, ...buildComponentsV2Payload(message) };
 }
 
 function buildDiscordEmbed(message: EmbedMessage): Record<string, unknown> {
