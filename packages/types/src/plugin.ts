@@ -90,6 +90,18 @@ export const pluginDashboardSchemaDocumentSchema = z
 
 export const pluginDashboardSchema = pluginDashboardShape.optional();
 
+export const packageMetadataSchema = z
+  .object({
+    packageVersion: z.string().optional(),
+    builtAt: z.string().optional(),
+    sourceCommit: z.string().optional(),
+    coreCompatibility: z.string().optional(),
+    manifestHash: z.string().optional(),
+    fileCount: z.number().optional(),
+    checksums: z.record(z.string(), z.string()).optional(),
+  })
+  .optional();
+
 export const pluginManifestSchema = z
   .object({
     id: pluginIdSchema,
@@ -102,6 +114,7 @@ export const pluginManifestSchema = z
     permissions: z.array(pluginPermissionSchema).max(100),
     capabilities: pluginCapabilitiesSchema,
     dashboard: pluginDashboardSchema,
+    packageMetadata: packageMetadataSchema,
   })
   .strict()
   .superRefine((manifest, context) => {

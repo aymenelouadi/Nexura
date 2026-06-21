@@ -173,11 +173,123 @@ export function registerPluginEventBridge(
   );
   bridge(
     client,
+    'guildBanAdd',
+    'guildBanAdd',
+    (ban) => ({
+      guildId: ban.guild.id,
+      serverId: ban.guild.id,
+      serverName: ban.guild.name,
+      userId: ban.user.id,
+      userName: ban.user.username,
+      userDisplayName: ban.user.globalName ?? ban.user.displayName ?? ban.user.username,
+      userAvatar: ban.user.displayAvatarURL({ size: 128 }),
+      reason: ban.reason,
+    }),
+    runtime,
+    logger,
+  );
+  bridge(
+    client,
+    'guildBanRemove',
+    'guildBanRemove',
+    (ban) => ({
+      guildId: ban.guild.id,
+      serverId: ban.guild.id,
+      serverName: ban.guild.name,
+      userId: ban.user.id,
+      userName: ban.user.username,
+      userDisplayName: ban.user.globalName ?? ban.user.displayName ?? ban.user.username,
+      userAvatar: ban.user.displayAvatarURL({ size: 128 }),
+    }),
+    runtime,
+    logger,
+  );
+  bridge(
+    client,
+    'messageDelete',
+    'messageDelete',
+    (message) => ({
+      guildId: message.guildId ?? undefined,
+      channelId: message.channelId,
+      messageId: message.id,
+      authorId: message.author?.id,
+      authorName: message.author?.username,
+      authorDisplayName: message.author?.globalName ?? message.author?.displayName ?? message.author?.username,
+      content: message.content,
+    }),
+    runtime,
+    logger,
+  );
+  bridge(
+    client,
+    'messageUpdate',
+    'messageUpdate',
+    (oldMessage, newMessage) => ({
+      guildId: newMessage.guildId ?? undefined,
+      channelId: newMessage.channelId,
+      messageId: newMessage.id,
+      authorId: newMessage.author?.id,
+      authorName: newMessage.author?.username,
+      authorDisplayName: newMessage.author?.globalName ?? newMessage.author?.displayName ?? newMessage.author?.username,
+      oldContent: oldMessage.content,
+      newContent: newMessage.content,
+    }),
+    runtime,
+    logger,
+  );
+  bridge(
+    client,
+    'channelCreate',
+    'channelCreate',
+    (channel) => ({
+      guildId: 'guildId' in channel ? channel.guildId : undefined,
+      serverId: 'guildId' in channel ? channel.guildId : undefined,
+      serverName: 'guild' in channel && channel.guild ? channel.guild.name : undefined,
+      channelId: channel.id,
+      channelName: 'name' in channel ? channel.name : undefined,
+      channelType: channel.type,
+    }),
+    runtime,
+    logger,
+  );
+  bridge(
+    client,
     'channelDelete',
     'channelDelete',
     (channel) => ({
       guildId: 'guildId' in channel ? channel.guildId : undefined,
       channelId: channel.id,
+      channelName: 'name' in channel ? channel.name : undefined,
+      channelType: channel.type,
+    }),
+    runtime,
+    logger,
+  );
+  bridge(
+    client,
+    'roleCreate',
+    'roleCreate',
+    (role) => ({
+      guildId: role.guild.id,
+      serverId: role.guild.id,
+      serverName: role.guild.name,
+      roleId: role.id,
+      roleName: role.name,
+      roleColor: role.color,
+    }),
+    runtime,
+    logger,
+  );
+  bridge(
+    client,
+    'roleDelete',
+    'roleDelete',
+    (role) => ({
+      guildId: role.guild.id,
+      serverId: role.guild.id,
+      serverName: role.guild.name,
+      roleId: role.id,
+      roleName: role.name,
     }),
     runtime,
     logger,

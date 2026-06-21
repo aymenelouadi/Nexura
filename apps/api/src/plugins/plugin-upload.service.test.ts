@@ -842,6 +842,10 @@ describe('PluginUploadService', () => {
         icon: 'Sparkles',
         tabs: ['overview', 'welcome'],
       },
+      packageMetadata: {
+        packageVersion: '1.1.0',
+        builtAt: '2026-06-20T16:00:00.000Z',
+      },
     };
     const zip = await createZipBuffer({
       'plugin.json': JSON.stringify(welcomeManifest),
@@ -905,6 +909,10 @@ describe('PluginUploadService', () => {
         label: 'Welcome',
         icon: 'Sparkles',
         tabs: ['overview', 'welcome'],
+      },
+      packageMetadata: {
+        packageVersion: '1.1.0',
+        builtAt: '2026-06-20T16:00:00.000Z',
       },
     };
     const zip = await createZipBuffer({
@@ -1023,5 +1031,216 @@ describe('PluginUploadService', () => {
     );
 
     expect(result.id).toBe('test-plugin');
+  });
+
+  it('rejects an outdated Welcome plugin package without packageMetadata', async () => {
+    const oldWelcomeManifest = {
+      id: 'welcome',
+      name: 'Welcome',
+      version: '1.0.0',
+      author: 'Nexura',
+      minCoreVersion: '0.2.5',
+      entry: 'index.ts',
+      permissions: [],
+      capabilities: {
+        commands: true,
+        events: true,
+        dashboard: true,
+        database: true,
+        templates: true,
+        visualEditor: true,
+        logs: true,
+      },
+      dashboard: {
+        enabled: true,
+        route: '/plugins/welcome',
+        label: 'Welcome',
+        icon: 'Sparkles',
+        tabs: ['overview', 'welcome'],
+      },
+    };
+    const zip = await createZipBuffer({
+      'plugin.json': JSON.stringify(oldWelcomeManifest),
+      'index.ts': 'export default {};',
+      'dashboard.schema.json': JSON.stringify(validDashboardSchema),
+    });
+    const { filePath, dir } = await createTempFile(zip);
+    tempPaths.push(dir);
+
+    const deps = createMockDeps();
+    deps.officialPluginRegistry.isOfficial = vi.fn().mockReturnValue(true);
+    const service = new PluginUploadService(
+      deps.pluginDiscoveryService,
+      deps.pluginManager,
+      deps.pluginRepository,
+      deps.pluginMigrationService,
+      deps.officialPluginRegistry,
+    );
+
+    await expect(
+      service.upload(
+        {
+          fieldname: 'file',
+          originalname: 'welcome.nexura',
+          encoding: '7bit',
+          mimetype: 'application/octet-stream',
+          size: zip.length,
+          destination: '',
+          filename: 'welcome.nexura',
+          path: filePath,
+          buffer: zip,
+        },
+        '1111111111111111111',
+      ),
+    ).rejects.toMatchObject({
+      response: {
+        error: {
+          code: 'PLUGIN_PACKAGE_OUTDATED',
+          message: 'This Welcome plugin package is outdated. Please build or download the latest package.',
+        },
+      },
+    });
+  });
+
+  it('rejects an outdated Welcome plugin package with version < 1.1.0', async () => {
+    const oldWelcomeManifest = {
+      id: 'welcome',
+      name: 'Welcome',
+      version: '1.0.0',
+      author: 'Nexura',
+      minCoreVersion: '0.2.5',
+      entry: 'index.ts',
+      permissions: [],
+      capabilities: {
+        commands: true,
+        events: true,
+        dashboard: true,
+        database: true,
+        templates: true,
+        visualEditor: true,
+        logs: true,
+      },
+      dashboard: {
+        enabled: true,
+        route: '/plugins/welcome',
+        label: 'Welcome',
+        icon: 'Sparkles',
+        tabs: ['overview', 'welcome'],
+      },
+      packageMetadata: {
+        packageVersion: '1.0.0',
+        builtAt: '2026-01-01T00:00:00.000Z',
+      },
+    };
+    const zip = await createZipBuffer({
+      'plugin.json': JSON.stringify(oldWelcomeManifest),
+      'index.ts': 'export default {};',
+      'dashboard.schema.json': JSON.stringify(validDashboardSchema),
+    });
+    const { filePath, dir } = await createTempFile(zip);
+    tempPaths.push(dir);
+
+    const deps = createMockDeps();
+    deps.officialPluginRegistry.isOfficial = vi.fn().mockReturnValue(true);
+    const service = new PluginUploadService(
+      deps.pluginDiscoveryService,
+      deps.pluginManager,
+      deps.pluginRepository,
+      deps.pluginMigrationService,
+      deps.officialPluginRegistry,
+    );
+
+    await expect(
+      service.upload(
+        {
+          fieldname: 'file',
+          originalname: 'welcome.nexura',
+          encoding: '7bit',
+          mimetype: 'application/octet-stream',
+          size: zip.length,
+          destination: '',
+          filename: 'welcome.nexura',
+          path: filePath,
+          buffer: zip,
+        },
+        '1111111111111111111',
+      ),
+    ).rejects.toMatchObject({
+      response: {
+        error: {
+          code: 'PLUGIN_PACKAGE_OUTDATED',
+          message: 'This Welcome plugin package is outdated. Please build or download the latest package.',
+        },
+      },
+    });
+  });
+
+  it('accepts a current Welcome plugin package with packageMetadata >= 1.1.0', async () => {
+    const newWelcomeManifest = {
+      id: 'welcome',
+      name: 'Welcome',
+      version: '1.1.0',
+      author: 'Nexura',
+      minCoreVersion: '0.2.5',
+      entry: 'index.ts',
+      permissions: [],
+      capabilities: {
+        commands: true,
+        events: true,
+        dashboard: true,
+        database: true,
+        templates: true,
+        visualEditor: true,
+        logs: true,
+      },
+      dashboard: {
+        enabled: true,
+        route: '/plugins/welcome',
+        label: 'Welcome',
+        icon: 'Sparkles',
+        tabs: ['overview', 'welcome'],
+      },
+      packageMetadata: {
+        packageVersion: '1.1.0',
+        builtAt: '2026-06-20T16:00:00.000Z',
+        sourceCommit: 'abc1234',
+        coreCompatibility: '0.2.5',
+      },
+    };
+    const zip = await createZipBuffer({
+      'plugin.json': JSON.stringify(newWelcomeManifest),
+      'index.ts': 'export default {};',
+      'dashboard.schema.json': JSON.stringify(validDashboardSchema),
+    });
+    const { filePath, dir } = await createTempFile(zip);
+    tempPaths.push(dir);
+
+    const deps = createMockDeps();
+    deps.officialPluginRegistry.isOfficial = vi.fn().mockReturnValue(true);
+    const service = new PluginUploadService(
+      deps.pluginDiscoveryService,
+      deps.pluginManager,
+      deps.pluginRepository,
+      deps.pluginMigrationService,
+      deps.officialPluginRegistry,
+    );
+
+    const result = await service.upload(
+      {
+        fieldname: 'file',
+        originalname: 'welcome.nexura',
+        encoding: '7bit',
+        mimetype: 'application/octet-stream',
+        size: zip.length,
+        destination: '',
+        filename: 'welcome.nexura',
+        path: filePath,
+        buffer: zip,
+      },
+      '1111111111111111111',
+    );
+
+    expect(result.id).toBe('welcome');
+    expect(result.version).toBe('1.1.0');
   });
 });

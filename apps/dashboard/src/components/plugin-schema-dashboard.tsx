@@ -19,17 +19,26 @@ import {
 } from '@nexura/ui';
 import type {
   CoreMessage,
+  GuildDetail,
   PluginDashboardAction,
   PluginDashboardField,
   PluginDashboardSchemaDocument,
   PluginDashboardSection,
+  User,
 } from '@nexura/types';
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertCircleIcon, SaveIcon, SendIcon } from 'lucide-react';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { toast } from 'sonner';
 
-import { botProfileQuery, guildChannelsQuery, guildPluginStorageQuery, guildPluginTemplatesQuery } from '../hooks/queries.js';
+import {
+  botProfileQuery,
+  currentUserQuery,
+  guildChannelsQuery,
+  guildPluginStorageQuery,
+  guildPluginTemplatesQuery,
+  guildQuery,
+} from '../hooks/queries.js';
 import { api } from '../lib/api-client.js';
 import { CoreSwitch } from './core-switch.js';
 import { ErrorState } from './error-state.js';
@@ -54,6 +63,8 @@ export function PluginSchemaDashboard({ guildId, pluginId, schema, tabId }: Plug
   const templates = useQuery(guildPluginTemplatesQuery(guildId, pluginId));
   const channels = useQuery(guildChannelsQuery(guildId));
   const botProfile = useQuery(botProfileQuery);
+  const currentUser = useQuery(currentUserQuery);
+  const guild = useQuery(guildQuery(guildId));
 
   const [draft, setDraft] = useState<Record<string, unknown>>({});
 
@@ -71,11 +82,17 @@ export function PluginSchemaDashboard({ guildId, pluginId, schema, tabId }: Plug
     return <PluginSchemaError title="Tab not found" message={`The requested tab is not available for this plugin.`} />;
   }
 
-  if (storageQueries.some((query) => query.isLoading) || templates.isLoading || channels.isLoading) {
+  if (
+    storageQueries.some((query) => query.isLoading) ||
+    templates.isLoading ||
+    channels.isLoading ||
+    currentUser.isLoading ||
+    guild.isLoading
+  ) {
     return <Skeleton className="h-96 w-full" />;
   }
 
-  const failedQuery = [...storageQueries, templates, channels].find((query) => query.isError);
+  const failedQuery = [...storageQueries, templates, channels, currentUser, guild].find((query) => query.isError);
   if (failedQuery?.error) {
     return <ErrorState message={(failedQuery.error as Error).message} onRetry={() => window.location.reload()} />;
   }
@@ -87,6 +104,8 @@ export function PluginSchemaDashboard({ guildId, pluginId, schema, tabId }: Plug
     draft,
     channels: channels.data?.data ?? [],
     templates: templates.data?.data ?? [],
+    currentUser: currentUser.data,
+    guild: guild.data,
     setFieldValue(field, value) {
       setDraft((current) => ({
         ...current,
@@ -223,7 +242,7 @@ function SchemaField({ field, context }: { field: PluginDashboardField; context:
           mode={mode}
           value={message}
           {...composerProps}
-          previewVariables={context.schema.previewVariables}
+          previewVariables={resolveRuntimeVariables(context)}
           onModeChange={(nextMode) => context.setTemplateValue(field, createDefaultMessage(nextMode))}
           onChange={(nextMessage) => context.setTemplateValue(field, nextMessage)}
         />
@@ -283,6 +302,36 @@ function SchemaFieldFrame({ field, children }: { field: PluginDashboardField; ch
   );
 }
 
+function resolveRuntimeVariables(context: SchemaRenderContext): Record<string, string> {
+  const fallback = context.schema.previewVariables ?? {};
+  const user = context.currentUser;
+  const guild = context.guild;
+
+  if (!user || !guild) {
+    return fallback;
+  }
+
+  const createdAt = new Date(user.createdAt);
+  const ageDays = Math.max(0, Math.floor((Date.now() - createdAt.getTime()) / 86_400_000));
+
+  return {
+    user: `<@${user.discordId}>`,
+    userName: user.username,
+    userDisplayName: user.globalName ?? user.username,
+    userId: user.discordId,
+    userCreatedDate: createdAt.toLocaleDateString('en-US'),
+    userCreatedDays: String(ageDays),
+    serverName: guild.name,
+    serverId: guild.id,
+    memberCount: String(guild.memberCount ?? 0),
+    inviter: fallback.inviter ?? 'Unavailable',
+    inviterName: fallback.inviterName ?? 'Unavailable',
+    inviterId: fallback.inviterId ?? '',
+    invitesCount: fallback.invitesCount ?? '0',
+    inviteCode: fallback.inviteCode ?? 'Unavailable',
+  };
+}
+
 async function runAction(action: PluginDashboardAction, context: SchemaRenderContext): Promise<void> {
   if (action.type === 'save_storage') {
     for (const key of action.storageKeys ?? []) {
@@ -307,9 +356,10 @@ async function runAction(action: PluginDashboardAction, context: SchemaRenderCon
   if (action.type === 'test_template') {
     const name = String(getValueAtPath(context.draft.settings, action.templateNamePath ?? '') ?? 'Template');
     const channelId = getValueAtPath(context.draft.settings, action.channelIdPath ?? '');
+    const variables = resolveRuntimeVariables(context);
     await api.testGuildPluginTemplate(context.guildId, context.pluginId, name, {
       ...(typeof channelId === 'string' ? { channelId } : {}),
-      variables: context.schema.previewVariables,
+      variables,
     });
   }
 }
@@ -388,6 +438,8 @@ interface SchemaRenderContext {
   draft: Record<string, unknown>;
   channels: Array<{ id: string; name: string }>;
   templates: Array<{ name: string }>;
+  currentUser?: User;
+  guild?: GuildDetail;
   botName?: string;
   botAvatarUrl?: string;
   setFieldValue: (field: PluginDashboardField, value: unknown) => void;

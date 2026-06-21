@@ -212,9 +212,6 @@ importers:
       '@hookform/resolvers':
         specifier: ^5.4.0
         version: 5.4.0(react-hook-form@7.79.0(react@19.2.7))
-      '@nexura/plugin-welcome':
-        specifier: workspace:*
-        version: link:../../plugins/welcome
       '@nexura/types':
         specifier: workspace:*
         version: link:../../packages/types
@@ -465,7 +462,7 @@ importers:
         specifier: 6.0.3
         version: 6.0.3
 
-  plugins/welcome:
+  plugins/logs:
     dependencies:
       '@nexura/shared':
         specifier: workspace:*

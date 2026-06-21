@@ -264,8 +264,36 @@ export class PluginUploadService {
     }
 
     await this.validateRuntimeEntry(sourceDir, manifest);
+    this.validatePackageVersionGuard(manifest);
 
     return manifest;
+  }
+
+  private validatePackageVersionGuard(manifest: PluginManifest): void {
+    // Reject known outdated Welcome plugin packages that contain old bugs
+    // (fake preview variables, missing createContentMap, incomplete variable set)
+    if (manifest.id === 'welcome') {
+      const packageVersion = (manifest as Record<string, unknown>).packageMetadata?.packageVersion as string | undefined;
+      const hasMetadata = !!(manifest as Record<string, unknown>).packageMetadata;
+
+      if (!hasMetadata) {
+        throw new PluginOperationException(
+          'PLUGIN_PACKAGE_OUTDATED',
+          'This Welcome plugin package is outdated. Please build or download the latest package.',
+          HttpStatus.BAD_REQUEST,
+          { pluginId: manifest.id, reason: 'missing_package_metadata' },
+        );
+      }
+
+      if (packageVersion && semver.lt(packageVersion, '1.1.0')) {
+        throw new PluginOperationException(
+          'PLUGIN_PACKAGE_OUTDATED',
+          'This Welcome plugin package is outdated. Please build or download the latest package.',
+          HttpStatus.BAD_REQUEST,
+          { pluginId: manifest.id, packageVersion, requiredVersion: '1.1.0' },
+        );
+      }
+    }
   }
 
   private async validateRuntimeEntry(sourceDir: string, manifest: PluginManifest): Promise<void> {

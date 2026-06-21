@@ -55,11 +55,18 @@ export const updatePluginCommandSchema = z
 export const pluginEventNameSchema = z.enum([
   'guildMemberAdd',
   'guildMemberRemove',
+  'guildBanAdd',
+  'guildBanRemove',
   'interactionCreate',
   'messageCreate',
+  'messageDelete',
+  'messageUpdate',
   'guildCreate',
   'guildDelete',
+  'channelCreate',
   'channelDelete',
+  'roleCreate',
+  'roleDelete',
   'inviteCreate',
   'inviteDelete',
 ]);
