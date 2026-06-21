@@ -34,7 +34,7 @@ const baseSettings: AppSettings = {
 };
 
 const baseUser: User = {
-  id: '11111111-1111-1111-1111-111111111111',
+  id: '11111111-1111-4111-9111-111111111111',
   discordId: '123456789012345678',
   username: 'testuser',
   globalName: 'Test User',

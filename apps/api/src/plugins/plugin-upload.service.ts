@@ -273,10 +273,10 @@ export class PluginUploadService {
     // Reject known outdated Welcome plugin packages that contain old bugs
     // (fake preview variables, missing createContentMap, incomplete variable set)
     if (manifest.id === 'welcome') {
-      const packageVersion = (manifest as Record<string, unknown>).packageMetadata?.packageVersion as string | undefined;
-      const hasMetadata = !!(manifest as Record<string, unknown>).packageMetadata;
+      const metadata = manifest.packageMetadata;
+      const packageVersion = metadata?.packageVersion;
 
-      if (!hasMetadata) {
+      if (!metadata) {
         throw new PluginOperationException(
           'PLUGIN_PACKAGE_OUTDATED',
           'This Welcome plugin package is outdated. Please build or download the latest package.',

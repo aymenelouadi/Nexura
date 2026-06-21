@@ -9,10 +9,10 @@ import { PluginUploadDialog } from './plugin-upload-dialog.js';
 
 const guildId = '1111111111111111111';
 
-const welcomePlugin = {
-  id: 'welcome',
-  name: 'Welcome',
-  description: 'Greet new members',
+const uploadedPlugin = {
+  id: 'test-plugin',
+  name: 'Test Plugin',
+  description: 'A test plugin',
   version: '1.0.0',
   author: 'Nexura',
   status: 'INSTALLED' as const,
@@ -21,7 +21,7 @@ const welcomePlugin = {
   guildStatus: 'DISABLED' as const,
   installedAt: '2024-01-01T00:00:00Z',
   updatedAt: '2024-01-01T00:00:00Z',
-  dashboard: { enabled: true, route: 'welcome', label: 'Welcome', icon: 'smile', tabs: [] },
+  dashboard: { enabled: true, route: 'test-plugin', label: 'Test Plugin', icon: 'smile', tabs: [] },
 };
 
 function createFile(name: string, type: string): File {
@@ -46,19 +46,19 @@ describe('PluginUploadDialog', () => {
 
   beforeEach(() => {
     localStorageSpy = vi.spyOn(window.localStorage, 'getItem').mockReturnValue(null);
-    vi.spyOn(api, 'uploadGuildPlugin').mockResolvedValue(welcomePlugin);
+    vi.spyOn(api, 'uploadGuildPlugin').mockResolvedValue(uploadedPlugin);
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
   });
 
-  it('uploads the Welcome plugin and calls onOpenChange on success', async () => {
+  it('uploads a plugin and calls onOpenChange on success', async () => {
     const user = userEvent.setup();
     const onOpenChange = vi.fn();
     const { fileInput } = renderDialog({ onOpenChange });
 
-    await user.upload(fileInput, createFile('welcome.nexura', 'application/octet-stream'));
+    await user.upload(fileInput, createFile('test-plugin.nexura', 'application/octet-stream'));
 
     const installButton = screen.getByRole('button', { name: /install plugin/i });
     await user.click(installButton);

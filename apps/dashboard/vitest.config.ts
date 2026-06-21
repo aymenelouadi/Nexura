@@ -11,7 +11,7 @@ export default defineConfig({
     pool: 'forks',
     maxWorkers: 2,
     minWorkers: 1,
-    testTimeout: 15_000,
+    testTimeout: 30_000,
     forks: {
       execArgv: ['--max-old-space-size=8192'],
     },

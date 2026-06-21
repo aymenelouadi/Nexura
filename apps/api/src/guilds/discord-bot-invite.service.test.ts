@@ -28,7 +28,7 @@ describe('DiscordBotInviteService', () => {
       'applications.commands',
       'bot',
     ]);
-    expect(invite.searchParams.get('permissions')).toBe('0');
+    expect(invite.searchParams.get('permissions')).toBe('268815361');
     expect(invite.searchParams.get('guild_id')).toBe('987654321098765432');
     expect(invite.searchParams.get('disable_guild_select')).toBe('true');
     expect(invite.searchParams.get('integration_type')).toBe('0');

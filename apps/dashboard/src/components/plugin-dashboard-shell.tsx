@@ -1,4 +1,4 @@
-import { Badge, Button, cn, Empty, EmptyDescription, EmptyHeader, EmptyTitle, Tabs, TabsList, TabsTrigger } from '@nexura/ui';
+import { Badge, Button, cn, Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@nexura/ui';
 import type { PluginDashboard } from '@nexura/types';
 import {
   FileClockIcon,
@@ -71,24 +71,31 @@ export function PluginDashboardShell({
         }
       />
 
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="w-full justify-start overflow-x-auto rounded-lg border border-border bg-card p-1 sm:w-auto">
+      <div className="flex flex-col gap-6">
+        <div
+          role="tablist"
+          aria-orientation="horizontal"
+          className="inline-flex h-10 w-full items-center justify-start overflow-x-auto rounded-lg border border-border bg-card p-1 sm:w-auto"
+        >
           {tabs.map((tab) => (
-            <TabsTrigger
+            <button
               key={tab.id}
-              value={tab.id}
+              type="button"
+              role="tab"
+              aria-selected={activeTab === tab.id}
+              onClick={() => setActiveTab(tab.id)}
               className={cn(
-                'flex shrink-0 items-center gap-2 rounded-md px-4 py-2 text-sm font-medium data-[state=active]:bg-accent data-[state=active]:text-foreground',
+                'flex shrink-0 items-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-colors',
+                activeTab === tab.id ? 'bg-accent text-foreground' : 'text-muted-foreground hover:text-foreground',
               )}
             >
               {tab.icon}
               {tab.label}
-            </TabsTrigger>
+            </button>
           ))}
-        </TabsList>
-      </Tabs>
-
-      <section className="min-h-64">{activeContent}</section>
+        </div>
+        <section className="min-h-64">{activeContent}</section>
+      </div>
     </div>
   );
 }

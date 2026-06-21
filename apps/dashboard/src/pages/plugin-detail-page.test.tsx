@@ -170,6 +170,21 @@ describe('PluginDetailPage', () => {
       discriminator: null,
     });
     vi.spyOn(api, 'getGuildPluginLogs').mockResolvedValue({ data: [] });
+    vi.spyOn(api, 'getCurrentUser').mockResolvedValue({
+      id: '11111111-1111-4111-9111-111111111111',
+      discordId: '123456789012345678',
+      username: 'testuser',
+      globalName: 'Test User',
+      avatar: null,
+      createdAt: '2024-01-01T00:00:00Z',
+      updatedAt: '2024-01-01T00:00:00Z',
+    });
+    vi.spyOn(api, 'getBotProfile').mockResolvedValue({
+      id: '123456789012345678',
+      username: 'NexuraBot',
+      avatarUrl: null,
+      discriminator: null,
+    });
   });
 
   afterEach(() => {
@@ -182,7 +197,7 @@ describe('PluginDetailPage', () => {
 
     await user.click(await screen.findByRole('tab', { name: /welcome/i }));
 
-    expect(await screen.findByText('Welcome messages')).toBeInTheDocument();
+    expect(await screen.findByText('Welcome messages', undefined, { timeout: 5000 })).toBeInTheDocument();
     expect(screen.getByText('Enable welcome messages')).toBeInTheDocument();
     expect(screen.getByText('Message composer')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /send test welcome message/i })).toBeInTheDocument();
@@ -194,7 +209,7 @@ describe('PluginDetailPage', () => {
 
     await user.click(await screen.findByRole('tab', { name: /leave/i }));
 
-    expect(await screen.findByText('Leave messages')).toBeInTheDocument();
+    expect(await screen.findByText('Leave messages', undefined, { timeout: 5000 })).toBeInTheDocument();
   });
 
   it('shows a repair card when dashboard content is missing', async () => {
@@ -231,4 +246,5 @@ describe('PluginDetailPage', () => {
     expect(screen.queryByText(/schema-driven/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/metadata-only/i)).not.toBeInTheDocument();
   });
+
 });

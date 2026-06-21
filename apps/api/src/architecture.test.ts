@@ -96,20 +96,24 @@ describe('API Core architecture boundaries', () => {
     expect(registrySource).not.toContain('schemaFallback');
   });
 
-  it('stores the Welcome dashboard schema inside the Welcome plugin package', () => {
-    const schemaPath = join(sourceRoot, '..', '..', '..', 'plugins', 'welcome', 'dashboard.schema.json');
+  it('stores the Logs dashboard schema inside the Logs plugin package', () => {
+    const schemaPath = join(sourceRoot, '..', '..', '..', 'plugins', 'logs', 'dashboard.schema.json');
     expect(existsSync(schemaPath)).toBe(true);
     const schema = readFileSync(schemaPath, 'utf8');
     expect(schema).toContain('"contentMode": "schema"');
-    expect(schema).toContain('"id": "welcome"');
-    expect(schema).toContain('"id": "leave"');
-    expect(schema).toContain('"id": "dm"');
+    expect(schema).toContain('"id": "overview"');
+    expect(schema).toContain('"id": "settings"');
   });
 
-  it('keeps Welcome actions inside the Welcome plugin package', () => {
-    const pluginDir = join(sourceRoot, '..', '..', '..', 'plugins', 'welcome');
+  it('keeps Logs plugin actions inside the Logs plugin package', () => {
+    const pluginDir = join(sourceRoot, '..', '..', '..', 'plugins', 'logs');
     expect(existsSync(join(pluginDir, 'plugin.json'))).toBe(true);
     expect(existsSync(join(pluginDir, 'index.ts'))).toBe(true);
+  });
+
+  it('does not ship Welcome plugin source in the repository', () => {
+    const welcomeDir = join(sourceRoot, '..', '..', '..', 'plugins', 'welcome');
+    expect(existsSync(welcomeDir)).toBe(false);
   });
 
   it('does not have Welcome-specific database tables or migrations in Core', () => {

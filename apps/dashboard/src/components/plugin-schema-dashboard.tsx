@@ -438,10 +438,10 @@ interface SchemaRenderContext {
   draft: Record<string, unknown>;
   channels: Array<{ id: string; name: string }>;
   templates: Array<{ name: string }>;
-  currentUser?: User;
-  guild?: GuildDetail;
-  botName?: string;
-  botAvatarUrl?: string;
+  currentUser?: User | undefined;
+  guild?: GuildDetail | undefined;
+  botName?: string | undefined;
+  botAvatarUrl?: string | undefined;
   setFieldValue: (field: PluginDashboardField, value: unknown) => void;
   setTemplateValue: (field: PluginDashboardField, value: CoreMessage) => void;
 }
