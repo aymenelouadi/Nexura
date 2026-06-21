@@ -20,12 +20,14 @@ import {
   pluginTestResultSchema,
   problemDetailSchema,
   testTemplateSchema,
+  pluginTestLogRequestSchema,
   userSchema,
   type ActivityEventListResponse,
   type ActivityQuery,
   type AppSettings,
   type AppSettingsSectionId,
   type BotProfile,
+  type CoreMessage,
   type GuildDetail,
   type GuildListResponse,
   type GuildPlugin,
@@ -41,6 +43,7 @@ import {
   type PluginStorageValue,
   type PluginTemplate,
   type PluginTemplateListResponse,
+  type PluginTestLogRequest,
   type PluginTestResult,
   type ProblemDetail,
   type SavePluginTemplate,
@@ -252,6 +255,16 @@ export const api = {
         body: JSON.stringify(testTemplateSchema.parse({ templateName: name, ...body })),
       },
     ),
+  testGuildPluginLog: (guildId: string, pluginId: string, body: PluginTestLogRequest) =>
+    request(
+      `/api/v1/guilds/${encodeURIComponent(guildId)}/plugins/${encodeURIComponent(pluginId)}/test-log`,
+      pluginTestResultSchema,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(pluginTestLogRequestSchema.parse(body)),
+      },
+    ),
   logout: () => requestWithoutContent('/api/v1/auth/logout', { method: 'POST' }),
 } satisfies {
   getCurrentUser: () => Promise<User>;
@@ -312,6 +325,7 @@ export const api = {
     name: string,
     body: TestTemplate,
   ) => Promise<PluginTestResult>;
+  testGuildPluginLog: (guildId: string, pluginId: string, body: PluginTestLogRequest) => Promise<PluginTestResult>;
   logout: () => Promise<void>;
 };
 

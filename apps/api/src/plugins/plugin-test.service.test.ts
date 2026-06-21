@@ -55,6 +55,40 @@ describe('PluginTestService', () => {
     );
   });
 
+  it('sends a raw message to a channel', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => ({ id: 'msg-3' }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const repository = {
+      getTemplate: vi.fn(),
+    } as unknown as PluginCoreRepository;
+
+    const service = new PluginTestService(createEnvironment('bot-token'), repository);
+    const result = await service.sendMessage(
+      { guildId: '1111111111111111111', pluginId: 'logs' },
+      {
+        channelId: '2222222222222222222',
+        message: { type: 'embed', title: '[TEST] Member Joined', description: 'A member joined.', color: 0x22c55e },
+      },
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.messageId).toBe('msg-3');
+    expect(repository.getTemplate).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://discord.com/api/v10/channels/2222222222222222222/messages',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          embeds: [{ title: '[TEST] Member Joined', description: 'A member joined.', color: 0x22c55e }],
+        }),
+      }),
+    );
+  });
+
   it('sends a template to a user DM', async () => {
     const fetchMock = vi.fn().mockResolvedValueOnce({
       ok: true,

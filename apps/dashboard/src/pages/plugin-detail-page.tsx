@@ -28,6 +28,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { Component, type ReactNode, useState } from 'react';
 
 import { ErrorState } from '../components/error-state.js';
+import { LogsPluginDashboard } from '../components/logs-plugin-dashboard.js';
 import { PageHeader } from '../components/page-header.js';
 import { PluginDashboardShell } from '../components/plugin-dashboard-shell.js';
 import { PluginSchemaDashboard } from '../components/plugin-schema-dashboard.js';
@@ -127,7 +128,8 @@ export function PluginDetailPage() {
   }
 
   const schema = plugin.dashboardContent.schema;
-  const pluginTabs = plugin.dashboard.tabs.length ? plugin.dashboard.tabs : (schema?.tabs.map((tab) => tab.id) ?? ['overview']);
+  const isLogsPlugin = plugin.id === 'logs';
+  const pluginTabs = isLogsPlugin ? ['overview'] : plugin.dashboard.tabs.length ? plugin.dashboard.tabs : (schema?.tabs.map((tab) => tab.id) ?? ['overview']);
   const schemaContentMap = schema
     ? Object.fromEntries(
         schema.tabs.map((tab) => [
@@ -137,7 +139,7 @@ export function PluginDetailPage() {
       )
     : {};
   const contentMap: Record<string, ReactNode> = {
-    overview: <OverviewPlaceholder plugin={plugin} />,
+    overview: isLogsPlugin ? <LogsPluginDashboard guildId={guildId} plugin={plugin} /> : <OverviewPlaceholder plugin={plugin} />,
     settings: <SettingsPlaceholder plugin={plugin} />,
     ...schemaContentMap,
     commands: schemaContentMap.commands ?? <CommandsPlaceholder plugin={plugin} />,

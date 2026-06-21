@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { coreMessageSchema } from './core-api.js';
+
 export const botProfileSchema = z
   .object({
     id: z.string().min(1),
@@ -35,3 +37,12 @@ export const pluginTestResultSchema = z
   .strict();
 
 export type PluginTestResult = z.infer<typeof pluginTestResultSchema>;
+
+export const pluginTestLogRequestSchema = z
+  .object({
+    channelId: z.string().min(1).max(64),
+    message: coreMessageSchema,
+  })
+  .strict();
+
+export type PluginTestLogRequest = z.infer<typeof pluginTestLogRequestSchema>;

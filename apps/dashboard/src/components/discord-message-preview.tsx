@@ -205,7 +205,7 @@ function getMessageText(message: CoreMessage): string {
 }
 
 export function resolveVariables(value: string, data: Record<string, string> | undefined = samplePreviewData): string {
-  return value.replace(/\[([A-Za-z][A-Za-z0-9_]*)\]/gu, (match, name: string) => data[name] ?? match);
+  return value.replace(/\[([A-Za-z][A-Za-z0-9_.]*)\]/gu, (match, name: string) => data[name] ?? match);
 }
 
 function isRtl(value: string): boolean {

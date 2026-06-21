@@ -1,7 +1,7 @@
 import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 import type { ApiEnvironment, DiscordApiMessage, PluginScope } from '@nexura/shared';
 import { toDiscordApiPayload } from '@nexura/shared';
-import type { CoreMessage, PluginTemplate, PluginTestResult } from '@nexura/types';
+import type { CoreMessage, PluginTemplate, PluginTestLogRequest, PluginTestResult } from '@nexura/types';
 
 import { API_ENVIRONMENT } from '../config/tokens.js';
 import { PluginCoreRepository } from './plugin-core.repository.js';
@@ -35,6 +35,13 @@ export class PluginTestService {
       return { success: true, messageId: result.id, channelId: result.channel_id ?? destination.userId };
     }
     return { success: false, messageId: null, channelId: null };
+  }
+
+  async sendMessage(scope: PluginScope, request: PluginTestLogRequest): Promise<PluginTestResult> {
+    void scope;
+    const payload = toDiscordApiPayload(request.message);
+    const result = await this.sendToChannel(request.channelId, payload);
+    return { success: true, messageId: result.id, channelId: request.channelId };
   }
 
   private async sendToChannel(channelId: string, payload: DiscordApiMessage): Promise<{ id: string }> {

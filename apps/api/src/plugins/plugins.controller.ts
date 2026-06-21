@@ -32,6 +32,7 @@ import {
   testTemplateSchema,
   updatePluginCommandSchema,
   updatePluginLogSettingsSchema,
+  pluginTestLogRequestSchema,
   type DeletePluginRequest,
   type DuplicatePluginTemplate,
   type GuildPlugin,
@@ -43,6 +44,7 @@ import {
   type PluginLogSettings,
   type PluginTemplate,
   type PluginTemplateListResponse,
+  type PluginTestLogRequest,
   type PluginTestResult,
   type SavePluginTemplate,
   type TestTemplate,
@@ -295,6 +297,18 @@ export class PluginsController {
       { ...(body.channelId ? { channelId: body.channelId } : {}), ...(body.userId ? { userId: body.userId } : {}) },
       body.variables,
     );
+  }
+
+  @Post(':pluginId/test-log')
+  @UseGuards(SameOriginGuard)
+  async testLog(
+    @Req() request: Request,
+    @Param('guildId', guildIdPipe) guildId: string,
+    @Param('pluginId', pluginIdPipe) pluginId: string,
+    @Body(new ZodValidationPipe(pluginTestLogRequestSchema)) body: PluginTestLogRequest,
+  ): Promise<PluginTestResult> {
+    await this.assertPluginAccess(request, guildId, pluginId);
+    return this.pluginTestService.sendMessage({ guildId, pluginId }, body);
   }
 
   @Post('upload')
