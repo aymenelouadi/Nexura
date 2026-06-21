@@ -1,6 +1,6 @@
 'use strict';
 
-const { DownloadService } = require('../download-service');
+const { DOWNLOAD_HEADERS, DownloadService } = require('../download-service');
 
 describe('DownloadService', () => {
   it('picks a zip asset from a release object', () => {
@@ -41,5 +41,9 @@ describe('DownloadService', () => {
     expect(() => service.pickAsset({ tagName: 'v1.2.3', assets: [] })).toThrow(
       'Release has no downloadable assets',
     );
+  });
+
+  it('uses neutral accept headers for GitHub archive downloads', () => {
+    expect(DOWNLOAD_HEADERS).toEqual({ Accept: '*/*' });
   });
 });

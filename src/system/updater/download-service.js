@@ -5,6 +5,10 @@ const path = require('path');
 const axios = require('axios');
 const AdmZip = require('adm-zip');
 
+const DOWNLOAD_HEADERS = Object.freeze({
+  Accept: '*/*',
+});
+
 class DownloadService {
   /**
    * @param {object} [options]
@@ -101,9 +105,7 @@ class DownloadService {
         url,
         responseType: 'stream',
         timeout: this.timeout,
-        headers: {
-          Accept: 'application/octet-stream',
-        },
+        headers: DOWNLOAD_HEADERS,
         maxRedirects: 5,
       });
 
@@ -127,4 +129,4 @@ class DownloadService {
   }
 }
 
-module.exports = { DownloadService };
+module.exports = { DownloadService, DOWNLOAD_HEADERS };

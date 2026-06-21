@@ -123,17 +123,20 @@ const excludePatterns = [
   '*.temp',
   '.DS_Store',
   'Thumbs.db',
-  'welcome.nexura',
-  '.nexura',
+  '*.nexura',
 ];
 
 function shouldExclude(filePath) {
   const parts = filePath.split(/[\\/]/);
   return excludePatterns.some((pattern) =>
-    parts.some((part) =>
-      part === pattern || part.startsWith(pattern.replace('*', '')),
-    ),
+    parts.some((part) => matchesExcludePattern(part, pattern)),
   );
+}
+
+function matchesExcludePattern(part, pattern) {
+  if (pattern.startsWith('*.')) return part.endsWith(pattern.slice(1));
+  if (pattern.endsWith('.*')) return part.startsWith(pattern.slice(0, -1));
+  return part === pattern;
 }
 
 function collectFiles(dir, relPrefix = '') {
