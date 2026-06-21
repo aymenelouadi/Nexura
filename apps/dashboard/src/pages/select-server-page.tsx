@@ -53,7 +53,7 @@ export function SelectServerPage() {
       {guilds.isSuccess ? <ServerCollectionSummary guilds={manageableGuilds} /> : null}
       {guilds.isLoading ? <ServerGridSkeleton /> : null}
       {guilds.isError ? (
-        <ErrorState message={(guilds.error as Error).message} onRetry={() => void guilds.refetch()} />
+        <ErrorState message="Unable to load guild data." onRetry={() => void guilds.refetch()} />
       ) : null}
       {guilds.isSuccess && manageableGuilds.length === 0 ? <NoServers /> : null}
       {guilds.isSuccess && manageableGuilds.length > 0 ? (

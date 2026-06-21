@@ -10,7 +10,7 @@ import {
   Skeleton,
 } from '@nexura/ui';
 import { useQuery } from '@tanstack/react-query';
-import { CheckIcon, ChevronDownIcon, ListIcon, ServerIcon } from 'lucide-react';
+import { AlertTriangleIcon, CheckIcon, ChevronDownIcon, ListIcon, ServerIcon } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
@@ -86,27 +86,36 @@ export function ServerSwitcher() {
           />
         </div>
         <DropdownMenuGroup className="max-h-64 overflow-auto">
-          {filteredGuilds.slice(0, 20).map((guild) => (
-            <DropdownMenuItem
-              key={guild.id}
-            className="py-2"
-              onSelect={() => selectServer(guild.id)}
-            >
-              <GuildAvatar guild={guild} className="size-7" />
-              <span className="min-w-0 flex-1">
-                <span className="block truncate font-medium">{guild.name}</span>
-                <span className="block text-xs text-muted-foreground">
-                  {guild.botConnected ? 'Bot connected' : 'Bot missing'}
-                </span>
-              </span>
-              {guild.id === selectedGuildId ? (
-                <CheckIcon className="text-primary" aria-label="Selected" />
-              ) : null}
+          {guilds.isError ? (
+            <DropdownMenuItem disabled className="gap-2 text-destructive">
+              <AlertTriangleIcon className="size-4" />
+              Unable to load guild data
             </DropdownMenuItem>
-          ))}
-          {guilds.isSuccess && filteredGuilds.length === 0 ? (
-            <DropdownMenuItem disabled>No matching servers</DropdownMenuItem>
-          ) : null}
+          ) : (
+            <>
+              {filteredGuilds.slice(0, 20).map((guild) => (
+                <DropdownMenuItem
+                  key={guild.id}
+                  className="py-2"
+                  onSelect={() => selectServer(guild.id)}
+                >
+                  <GuildAvatar guild={guild} className="size-7" />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-medium">{guild.name}</span>
+                    <span className="block text-xs text-muted-foreground">
+                      {guild.botConnected ? 'Bot connected' : 'Bot missing'}
+                    </span>
+                  </span>
+                  {guild.id === selectedGuildId ? (
+                    <CheckIcon className="text-primary" aria-label="Selected" />
+                  ) : null}
+                </DropdownMenuItem>
+              ))}
+              {guilds.isSuccess && filteredGuilds.length === 0 ? (
+                <DropdownMenuItem disabled>No matching servers</DropdownMenuItem>
+              ) : null}
+            </>
+          )}
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={() => navigate('/dashboard/select-server')}>

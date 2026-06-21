@@ -1,4 +1,6 @@
+import { Alert, AlertDescription } from '@nexura/ui';
 import { useQuery } from '@tanstack/react-query';
+import { AlertTriangleIcon } from 'lucide-react';
 
 import { AccountHero } from '../components/account-hero.js';
 import { ActiveServerSection } from '../components/active-server-section.js';
@@ -24,6 +26,12 @@ export function DashboardPage() {
         title="Dashboard"
         description="Monitor your Discord workspace and keep the active server context close at hand."
       />
+      {guilds.isError ? (
+        <Alert variant="destructive">
+          <AlertTriangleIcon className="size-4" />
+          <AlertDescription>Unable to load guild data. Please try again later.</AlertDescription>
+        </Alert>
+      ) : null}
       <AccountHero user={user} />
       <DashboardStats guilds={guilds} />
       <ActiveServerSection selectedGuildId={selectedGuildId} />

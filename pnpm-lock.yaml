@@ -212,6 +212,9 @@ importers:
       '@hookform/resolvers':
         specifier: ^5.4.0
         version: 5.4.0(react-hook-form@7.79.0(react@19.2.7))
+      '@nexura/plugin-logs':
+        specifier: workspace:*
+        version: link:../../plugins/logs
       '@nexura/types':
         specifier: workspace:*
         version: link:../../packages/types
@@ -485,9 +488,6 @@ importers:
       react-router-dom:
         specifier: 7.17.0
         version: 7.17.0(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
-      zod:
-        specifier: 4.4.3
-        version: 4.4.3
     devDependencies:
       '@types/react':
         specifier: 19.2.17

@@ -27,11 +27,13 @@ import {
   TabsTrigger,
   Textarea,
 } from '@nexura/ui';
-import type { ComponentsV2Container, ComponentsV2Item, CoreMessage, EmbedMessage, GuildPlugin } from '@nexura/types';
+import { formatLogMessage, resolveVariable, type LogType, type LogVariables } from '@nexura/plugin-logs';
+import type { CoreMessage, GuildPlugin } from '@nexura/types';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   AlertTriangleIcon,
   BanIcon,
+  BugIcon,
   CheckCircle2Icon,
   Edit3Icon,
   EyeIcon,
@@ -86,11 +88,6 @@ interface LogsSettings {
   logTypes: Record<string, unknown>;
 }
 
-interface LogField {
-  label: string;
-  value: string;
-}
-
 interface LogDefinition {
   id: string;
   category: LogCategory;
@@ -99,7 +96,6 @@ interface LogDefinition {
   icon: ComponentType<SVGProps<SVGSVGElement>>;
   sample: Record<string, string>;
   defaults: { title: string; description: string; color: number };
-  fields: Array<{ label: string; key: string }>;
 }
 
 const defaultSettings: LogsSettings = {
@@ -127,15 +123,14 @@ const logDefinitions: LogDefinition[] = [
       user: '@Shaad',
       'user.id': '756947441592303707',
       'user.tag': 'shaad',
+      'user.name': 'Shaad',
+      'guild.name': "Shaad's server",
+      'guild.memberCount': '1,234',
       'server.name': "Shaad's server",
       'account.created': '2 years ago',
       timestamp: 'Today at 12:30',
     },
     defaults: { title: 'Member Joined', description: '[user] joined the server.', color: 0x22c55e },
-    fields: [
-      { label: 'User ID', key: 'user.id' },
-      { label: 'Account Created', key: 'account.created' },
-    ],
   },
   {
     id: 'member.left',
@@ -147,11 +142,13 @@ const logDefinitions: LogDefinition[] = [
       user: '@Aymen',
       'user.id': '648201390120330241',
       'user.tag': 'aymen',
+      'user.name': 'Aymen',
+      'guild.name': "Shaad's server",
+      'guild.memberCount': '1,234',
       'server.name': "Shaad's server",
       timestamp: 'Today at 12:30',
     },
     defaults: { title: 'Member Left', description: '[user] left the server.', color: 0xf97316 },
-    fields: [{ label: 'User ID', key: 'user.id' }],
   },
   {
     id: 'member.banned',
@@ -163,18 +160,18 @@ const logDefinitions: LogDefinition[] = [
       user: '@TroubleMaker',
       'user.id': '553192481902332111',
       'user.tag': 'troublemaker',
+      'user.name': 'TroubleMaker',
       executor: '@Admin',
       'executor.id': '756947441592303707',
+      'executor.tag': 'admin',
+      'executor.name': 'Admin',
       reason: 'Spam links',
+      'guild.name': "Shaad's server",
+      'guild.memberCount': '1,234',
       'server.name': "Shaad's server",
       timestamp: 'Today at 12:30',
     },
     defaults: { title: 'Member Banned', description: '[user] was banned. Reason: [reason]', color: 0xef4444 },
-    fields: [
-      { label: 'User', key: 'user' },
-      { label: 'Executor', key: 'executor' },
-      { label: 'Reason', key: 'reason' },
-    ],
   },
   {
     id: 'member.unbanned',
@@ -186,16 +183,18 @@ const logDefinitions: LogDefinition[] = [
       user: '@ReturningUser',
       'user.id': '673219481902332111',
       'user.tag': 'returninguser',
+      'user.name': 'ReturningUser',
       executor: '@Admin',
+      'executor.id': '756947441592303707',
+      'executor.tag': 'admin',
+      'executor.name': 'Admin',
       reason: 'Appeal accepted',
+      'guild.name': "Shaad's server",
+      'guild.memberCount': '1,234',
       'server.name': "Shaad's server",
       timestamp: 'Today at 12:30',
     },
     defaults: { title: 'Member Unbanned', description: '[user] was unbanned.', color: 0x3b82f6 },
-    fields: [
-      { label: 'User', key: 'user' },
-      { label: 'Executor', key: 'executor' },
-    ],
   },
   {
     id: 'message.deleted',
@@ -206,19 +205,19 @@ const logDefinitions: LogDefinition[] = [
     sample: {
       user: '@Aymen',
       'user.id': '648201390120330241',
+      'user.tag': 'aymen',
+      'user.name': 'Aymen',
       channel: '#general',
       'channel.id': '123456789012345678',
+      'channel.name': 'general',
       'message.content': 'hello, this is a deleted message',
       messageId: '123456789',
+      'guild.name': "Shaad's server",
+      'guild.memberCount': '1,234',
       'server.name': "Shaad's server",
       timestamp: 'Today at 12:30',
     },
     defaults: { title: 'Message Deleted', description: '[user] deleted a message in [channel].', color: 0xef4444 },
-    fields: [
-      { label: 'Author', key: 'user' },
-      { label: 'Channel', key: 'channel' },
-      { label: 'Content', key: 'message.content' },
-    ],
   },
   {
     id: 'message.edited',
@@ -229,18 +228,19 @@ const logDefinitions: LogDefinition[] = [
     sample: {
       user: '@Aymen',
       'user.id': '648201390120330241',
+      'user.tag': 'aymen',
+      'user.name': 'Aymen',
       channel: '#general',
+      'channel.id': '123456789012345678',
+      'channel.name': 'general',
       oldContent: 'helo world',
       newContent: 'hello world',
+      'guild.name': "Shaad's server",
+      'guild.memberCount': '1,234',
       'server.name': "Shaad's server",
       timestamp: 'Today at 12:30',
     },
     defaults: { title: 'Message Edited', description: '[user] edited a message in [channel].', color: 0xeab308 },
-    fields: [
-      { label: 'Author', key: 'user' },
-      { label: 'Channel', key: 'channel' },
-      { label: 'Change', key: 'oldContent' },
-    ],
   },
   {
     id: 'channel.created',
@@ -251,15 +251,17 @@ const logDefinitions: LogDefinition[] = [
     sample: {
       channel: '#announcements',
       'channel.id': '998877665544332211',
-      executor: '@Admin',
+      'channel.name': 'announcements',
+      executor: '@Shaad',
+      'executor.id': '756947441592303707',
+      'executor.tag': 'shaad',
+      'executor.name': 'Shaad',
+      'guild.name': "Shaad's server",
+      'guild.memberCount': '1,234',
       'server.name': "Shaad's server",
       timestamp: 'Today at 12:30',
     },
     defaults: { title: 'Channel Created', description: '[channel] was created by [executor].', color: 0x22c55e },
-    fields: [
-      { label: 'Channel', key: 'channel' },
-      { label: 'Executor', key: 'executor' },
-    ],
   },
   {
     id: 'channel.deleted',
@@ -270,15 +272,17 @@ const logDefinitions: LogDefinition[] = [
     sample: {
       channel: '#old-chat',
       'channel.id': '887766554433221100',
-      executor: '@Admin',
+      'channel.name': 'old-chat',
+      executor: '@Shaad',
+      'executor.id': '756947441592303707',
+      'executor.tag': 'shaad',
+      'executor.name': 'Shaad',
+      'guild.name': "Shaad's server",
+      'guild.memberCount': '1,234',
       'server.name': "Shaad's server",
       timestamp: 'Today at 12:30',
     },
     defaults: { title: 'Channel Deleted', description: '[channel] was deleted by [executor].', color: 0xef4444 },
-    fields: [
-      { label: 'Channel', key: 'channel' },
-      { label: 'Executor', key: 'executor' },
-    ],
   },
   {
     id: 'role.created',
@@ -289,15 +293,17 @@ const logDefinitions: LogDefinition[] = [
     sample: {
       role: '@Moderator',
       'role.id': '112233445566778899',
+      'role.name': 'Moderator',
       executor: '@Shaad',
+      'executor.id': '756947441592303707',
+      'executor.tag': 'shaad',
+      'executor.name': 'Shaad',
+      'guild.name': "Shaad's server",
+      'guild.memberCount': '1,234',
       'server.name': "Shaad's server",
       timestamp: 'Today at 12:30',
     },
     defaults: { title: 'Role Created', description: '[role] was created by [executor].', color: 0x22c55e },
-    fields: [
-      { label: 'Role', key: 'role' },
-      { label: 'Executor', key: 'executor' },
-    ],
   },
   {
     id: 'role.deleted',
@@ -308,30 +314,39 @@ const logDefinitions: LogDefinition[] = [
     sample: {
       role: '@Muted',
       'role.id': '998811223344556677',
+      'role.name': 'Muted',
       executor: '@Shaad',
+      'executor.id': '756947441592303707',
+      'executor.tag': 'shaad',
+      'executor.name': 'Shaad',
+      'guild.name': "Shaad's server",
+      'guild.memberCount': '1,234',
       'server.name': "Shaad's server",
       timestamp: 'Today at 12:30',
     },
     defaults: { title: 'Role Deleted', description: '[role] was deleted by [executor].', color: 0xef4444 },
-    fields: [
-      { label: 'Role', key: 'role' },
-      { label: 'Executor', key: 'executor' },
-    ],
   },
 ];
 
 const variables = [
   '[user]',
   '[user.id]',
+  '[user.name]',
   '[user.tag]',
   '[executor]',
   '[executor.id]',
+  '[executor.name]',
   '[channel]',
   '[channel.id]',
+  '[channel.name]',
   '[role]',
   '[role.id]',
+  '[role.name]',
   '[message.content]',
+  '[message.id]',
   '[reason]',
+  '[guild.name]',
+  '[guild.memberCount]',
   '[server.name]',
   '[timestamp]',
 ];
@@ -501,6 +516,10 @@ export function LogsPluginDashboard({ guildId, plugin }: { guildId: string; plug
             botAvatarUrl={botProfile.data?.avatarUrl}
           />
         </div>
+      </section>
+
+      <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(380px,0.65fr)]">
+        <DiagnosticsCard log={selectedLog ?? logDefinitions[0]!} settings={settings} />
       </section>
 
       <section className="space-y-4">
@@ -942,9 +961,16 @@ function LivePreviewCard({
   botName: string;
   botAvatarUrl: string | null | undefined;
 }) {
+  const [showDebug, setShowDebug] = useState(false);
   const config = resolveLogConfig(settings, log);
   const { message } = buildPreviewMessage(log, config, settings, false);
   const isComponents = message.type === 'components_v2';
+  const variables = buildPreviewVariables(log.sample);
+  const detectedVariables = useMemo(() => {
+    const template = `${config.title} ${config.description} ${config.footer}`;
+    const matches = template.match(/\[([A-Za-z][A-Za-z0-9_.]*)\]/gu) ?? [];
+    return Array.from(new Set(matches.map((match) => match.slice(1, -1))));
+  }, [config.title, config.description, config.footer]);
 
   return (
     <Card className="overflow-hidden">
@@ -957,6 +983,83 @@ function LivePreviewCard({
       </CardHeader>
       <CardContent className={isComponents ? 'border-l-4 p-4' : 'p-4'} style={isComponents ? { borderLeftColor: numberToHex(config.color) } : undefined}>
         <DiscordMessagePreview message={message} botName={botName} botAvatarUrl={botAvatarUrl} previewVariables={log.sample} />
+        <button
+          type="button"
+          onClick={() => setShowDebug((value) => !value)}
+          className="mt-4 flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+        >
+          <BugIcon className="size-3.5" />
+          {showDebug ? 'Hide debug' : 'Show debug'}
+        </button>
+        {showDebug ? (
+          <div className="mt-3 rounded-md border border-border bg-muted/50 p-3 text-xs">
+            <p className="mb-2 font-medium text-foreground">Variable resolution</p>
+            {detectedVariables.length === 0 ? (
+              <p className="text-muted-foreground">No variables detected.</p>
+            ) : (
+              <ul className="space-y-1">
+                {detectedVariables.map((name) => {
+                  const resolved = resolveVariable(name, variables);
+                  const display =
+                    typeof resolved === 'string' || typeof resolved === 'number'
+                      ? String(resolved)
+                      : 'Unknown';
+                  return (
+                    <li key={name} className="flex items-center justify-between gap-2">
+                      <code className="rounded bg-background px-1 py-0.5 text-[10px]">[{name}]</code>
+                      <span className="truncate text-muted-foreground">{display}</span>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+        ) : null}
+      </CardContent>
+    </Card>
+  );
+}
+
+function DiagnosticsCard({ log, settings }: { log: LogDefinition; settings: LogsSettings }) {
+  const config = resolveLogConfig(settings, log);
+  const template = `${config.title} ${config.description} ${config.footer}`;
+  const detected = (template.match(/\[[A-Za-z][A-Za-z0-9_.]*\]/gu) ?? []) as string[];
+  const invalid = detected.filter((match) => !variables.includes(match));
+  const variableResolverStatus = invalid.length === 0 ? 'success' : 'warning';
+
+  const diagnostics = [
+    { label: 'Template engine', status: 'success' as const },
+    { label: 'Variable resolver', status: variableResolverStatus },
+    { label: 'Preview renderer', status: 'success' as const },
+    { label: 'Discord renderer', status: 'success' as const },
+  ];
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <BugIcon className="size-4" />
+          Diagnostics
+        </CardTitle>
+        <p className="text-sm text-muted-foreground">Health checks for the log rendering pipeline.</p>
+      </CardHeader>
+      <CardContent>
+        <ul className="space-y-2">
+          {diagnostics.map((item) => (
+            <li key={item.label} className="flex items-center justify-between gap-3 text-sm">
+              <span>{item.label}</span>
+              <span className={`flex items-center gap-1.5 text-xs font-medium ${item.status === 'success' ? 'text-success' : 'text-warning'}`}>
+                {item.status === 'success' ? <CheckCircle2Icon className="size-3.5" /> : <AlertTriangleIcon className="size-3.5" />}
+                {item.status === 'success' ? 'OK' : 'Warning'}
+              </span>
+            </li>
+          ))}
+        </ul>
+        {invalid.length > 0 ? (
+          <Alert variant="destructive" className="mt-4 py-2">
+            <AlertDescription className="text-xs">Unknown variables: {invalid.join(', ')}</AlertDescription>
+          </Alert>
+        ) : null}
       </CardContent>
     </Card>
   );
@@ -1067,75 +1170,55 @@ interface PreviewResult {
   allowedMentions: { parse: string[]; users: string[]; roles: string[] };
 }
 
-function buildPreviewMessage(log: LogDefinition, config: ResolvedLogConfig, settings: LogsSettings, isTest: boolean): PreviewResult {
-  const title = renderTemplate(config.title, log.sample);
-  const description = renderTemplate(config.description, log.sample);
-  const footerText = renderTemplate(config.footer, log.sample);
-  const testPrefix = isTest ? '[TEST] ' : '';
-  const fields = getLogFields(log, log.sample);
-  const allowedMentions = computePreviewAllowedMentions(log.sample);
-
-  if (config.format === 'components_v2') {
-    const items: ComponentsV2Item[] = [];
-    items.push({ type: 'text_display', content: `**${testPrefix}${title}**` });
-    if (description) items.push({ type: 'text_display', content: description });
-    if (fields.length > 0) {
-      items.push({ type: 'separator', divider: true, spacing: 'small' });
-      for (const field of fields) {
-        items.push({ type: 'text_display', content: `**${field.label}:** ${field.value}` });
-      }
-    }
-    if (footerText || config.showTimestamp) {
-      items.push({ type: 'separator', divider: true, spacing: 'small' });
-      items.push({ type: 'text_display', content: `${footerText}${footerText && config.showTimestamp ? ' • ' : ''}${config.showTimestamp ? 'Today at 12:30' : ''}` });
-    }
-    const container: ComponentsV2Container = { type: 'container', spoiler: false, items };
-    return { message: { type: 'components_v2', components: [container] }, allowedMentions };
-  }
-
-  const message: EmbedMessage = {
-    type: 'embed',
-    title: `${testPrefix}${title}`,
-    description,
-    color: config.color,
-    fields: fields.map((field) => ({ name: field.label, value: field.value, inline: false })),
+function buildPreviewVariables(sample: Record<string, string>): LogVariables {
+  const asNumber = (value: string | undefined): number | undefined => {
+    if (!value) return undefined;
+    const normalized = value.replace(/,/gu, '');
+    const parsed = Number.parseInt(normalized, 10);
+    return Number.isFinite(parsed) ? parsed : undefined;
   };
-  if (config.showAvatar) {
-    message.thumbnailUrl = 'https://cdn.discordapp.com/embed/avatars/0.png';
-  }
-  if (footerText || config.showTimestamp) {
-    message.footer = { text: `${footerText}${footerText && config.showTimestamp ? ' • ' : ''}${config.showTimestamp ? 'Today at 12:30' : ''}`, iconSource: 'none' };
-  }
-  return { message, allowedMentions };
+
+  return {
+    user: sample.user,
+    userId: sample['user.id'],
+    userName: sample['user.tag'],
+    userDisplayName: sample['user.name'],
+    executor: sample.executor,
+    executorId: sample['executor.id'],
+    executorName: sample['executor.tag'],
+    executorDisplayName: sample['executor.name'],
+    channel: sample.channel,
+    channelId: sample['channel.id'],
+    channelName: sample['channel.name'],
+    role: sample.role,
+    roleId: sample['role.id'],
+    roleName: sample['role.name'],
+    messageId: sample.messageId,
+    messageContent: sample['message.content'],
+    oldContent: sample.oldContent,
+    newContent: sample.newContent,
+    reason: sample.reason,
+    guildName: sample['guild.name'] ?? sample['server.name'],
+    guildMemberCount: asNumber(sample['guild.memberCount']),
+    serverName: sample['server.name'] ?? sample['guild.name'],
+    memberCount: asNumber(sample['guild.memberCount']),
+  };
 }
 
-function computePreviewAllowedMentions(sample: Record<string, string>): { parse: string[]; users: string[]; roles: string[] } {
-  const users: string[] = [];
-  const roles: string[] = [];
-  const userId = sample['user.id'];
-  const executorId = sample['executor.id'];
-  const roleId = sample['role.id'];
-  if (userId && /^\d{17,20}$/.test(userId)) users.push(userId);
-  if (executorId && /^\d{17,20}$/.test(executorId)) users.push(executorId);
-  if (roleId && /^\d{17,20}$/.test(roleId)) roles.push(roleId);
-  return { parse: [], users: Array.from(new Set(users)), roles: Array.from(new Set(roles)) };
-}
-
-function getLogFields(log: LogDefinition, sample: Record<string, string>): LogField[] {
-  const fields: LogField[] = [];
-  for (const { label, key } of log.fields) {
-    if (key === 'oldContent') {
-      const oldValue = sample.oldContent ?? '';
-      const newValue = sample.newContent ?? '';
-      if (oldValue || newValue) {
-        fields.push({ label: 'Change', value: `${oldValue} → ${newValue}` });
-      }
-      continue;
-    }
-    const value = sample[key];
-    if (value) fields.push({ label, value });
-  }
-  return fields;
+function buildPreviewMessage(log: LogDefinition, config: ResolvedLogConfig, _settings: LogsSettings, isTest: boolean): PreviewResult {
+  const testPrefix = isTest ? '[TEST] ' : '';
+  const variables = buildPreviewVariables(log.sample);
+  return formatLogMessage({
+    type: log.id as LogType,
+    title: `${testPrefix}${config.title}`,
+    description: config.description,
+    footer: config.footer,
+    color: config.color,
+    format: config.format,
+    showTimestamp: config.showTimestamp,
+    showAvatar: config.showAvatar,
+    variables,
+  });
 }
 
 function normalizeSettings(value: unknown): LogsSettings {
@@ -1187,10 +1270,6 @@ function setLogConfig(settings: LogsSettings, logId: string, config: LogTypeConf
   const rawCategory = settings.logTypes[category!];
   const existingCategory: Record<string, unknown> = isRecord(rawCategory) ? rawCategory : {};
   return { ...settings, logTypes: { ...settings.logTypes, [category!]: { ...existingCategory, [name!]: config } } };
-}
-
-function renderTemplate(template: string, sample: Record<string, string>): string {
-  return template.replace(/\[([A-Za-z][A-Za-z0-9_.]*)\]/gu, (match, key: string) => sample[key] ?? match);
 }
 
 function labelFormat(format: LogFormat) {

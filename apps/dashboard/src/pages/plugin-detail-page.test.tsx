@@ -246,6 +246,7 @@ describe('PluginDetailPage', () => {
     expect(screen.getByText('Log types')).toBeInTheDocument();
     expect(screen.queryByText('No settings')).not.toBeInTheDocument();
     expect(screen.queryByText('This section does not have any configurable settings.')).not.toBeInTheDocument();
+    expect(screen.getByText(/@Shaad joined the server/i)).toBeInTheDocument();
   });
 
   it('renders Welcome tab content from dashboard schema', async () => {
