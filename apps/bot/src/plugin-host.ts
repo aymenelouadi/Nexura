@@ -1,6 +1,6 @@
-import { readFile, readdir, stat } from 'node:fs/promises';
+import { mkdir, readFile, readdir, stat, symlink } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { guildPlugins, plugins, type Database } from '@nexura/database';
@@ -36,6 +36,7 @@ export class PluginHost {
   private readonly runtime: PluginRuntime;
   private readonly contexts = new Map<string, PluginContext>();
   private readonly loaded = new Map<string, LoadedPlugin>();
+  private readonly failedLoadIds = new Set<string>();
   private refreshTimer: ReturnType<typeof setInterval> | undefined;
   private refreshing = false;
   private refreshFailures = 0;
@@ -55,6 +56,7 @@ export class PluginHost {
       { pluginsDir: PLUGINS_DIRECTORY, installedDir: INSTALLED_PLUGINS_DIRECTORY },
       'Plugin host starting',
     );
+    await this.ensureInstalledPluginNodeModules();
     await this.loadModules();
     await this.refresh();
     this.refreshTimer = setInterval(() => {
@@ -92,14 +94,17 @@ export class PluginHost {
     let skipped = 0;
     let unregistered = 0;
     for (const directory of directories) {
+      let pluginId = basename(directory);
       try {
         const manifestRaw = JSON.parse(await readFile(join(directory, 'plugin.json'), 'utf8')) as unknown;
         const manifest = pluginManifestSchema.parse(manifestRaw);
+        pluginId = manifest.id;
         if (this.loaded.has(manifest.id)) {
           continue;
         }
         if (!registered.has(manifest.id)) {
           unregistered += 1;
+          this.failedLoadIds.delete(manifest.id);
           continue;
         }
         const runtimePath = await resolveRuntimePath(directory, manifest.entry);
@@ -111,15 +116,20 @@ export class PluginHost {
         }
         this.registry.register(manifest.id, imported.default);
         this.loaded.set(manifest.id, { manifest, module: imported.default });
+        this.failedLoadIds.delete(manifest.id);
         loadedNow += 1;
       } catch (error) {
         skipped += 1;
-        const err = error instanceof Error ? error.message : String(error);
-        const code = error instanceof Error && 'code' in error ? (error as Error & { code: string }).code : undefined;
-        this.logger.warn(
-          { directory, err, code },
-          'Plugin runtime module skipped',
-        );
+        const isFirstFailure = !this.failedLoadIds.has(pluginId);
+        if (isFirstFailure) {
+          this.failedLoadIds.add(pluginId);
+          const err = error instanceof Error ? error.message : String(error);
+          const code = error instanceof Error && 'code' in error ? (error as Error & { code: string }).code : undefined;
+          this.logger.warn(
+            { directory, pluginId, err, code },
+            'Plugin runtime module failed to load',
+          );
+        }
       }
     }
     this.logger.info(
@@ -141,6 +151,54 @@ export class PluginHost {
         'Failed to query registered plugin IDs; loading no modules to avoid errors',
       );
       return new Set();
+    }
+  }
+
+  private async ensureInstalledPluginNodeModules(): Promise<void> {
+    const workspaceRoot = resolveWorkspacePath();
+    const installedNodeModules = join(INSTALLED_PLUGINS_DIRECTORY, 'node_modules');
+    const nexuraDir = join(installedNodeModules, '@nexura');
+
+    const packagesDir = join(workspaceRoot, 'packages');
+    let packageDirs: string[];
+    try {
+      const entries = await readdir(packagesDir, { withFileTypes: true });
+      packageDirs = entries.filter((e) => e.isDirectory()).map((e) => e.name);
+    } catch {
+      this.logger.debug({ packagesDir }, 'Cannot scan workspace packages directory');
+      return;
+    }
+
+    let created = 0;
+    for (const pkgDir of packageDirs) {
+      const pkgJsonPath = join(packagesDir, pkgDir, 'package.json');
+      try {
+        const raw = await readFile(pkgJsonPath, 'utf8');
+        const pkgJson = JSON.parse(raw) as { name?: string };
+        const pkgName = pkgJson.name;
+        if (!pkgName || !pkgName.startsWith('@nexura/')) continue;
+
+        const target = join(packagesDir, pkgDir);
+        const linkPath = join(nexuraDir, pkgName.replace('@nexura/', ''));
+
+        await mkdir(nexuraDir, { recursive: true });
+
+        try {
+          await stat(linkPath);
+        } catch {
+          await symlink(target, linkPath, process.platform === 'win32' ? 'junction' : 'dir');
+          created += 1;
+        }
+      } catch (err) {
+        const code = (err as NodeJS.ErrnoException).code;
+        if (code !== 'EEXIST') {
+          this.logger.debug({ pkgDir, err: (err as Error).message }, 'Skipping workspace package symlink');
+        }
+      }
+    }
+
+    if (created > 0) {
+      this.logger.info({ created, nexuraDir }, 'Created node_modules symlinks for installed plugins');
     }
   }
 
