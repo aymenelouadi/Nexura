@@ -42,4 +42,11 @@ describe('compareVersions', () => {
     expect(result.current).toBe('1.0.0');
     expect(result.latest).toBe('1.0.1');
   });
+
+  it('strips uppercase leading V from versions', () => {
+    const result = compareVersions('V1.0.0', 'V1.0.1');
+    expect(result.hasUpdate).toBe(true);
+    expect(result.current).toBe('1.0.0');
+    expect(result.latest).toBe('1.0.1');
+  });
 });

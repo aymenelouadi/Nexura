@@ -68,7 +68,7 @@ class GitHubClient {
 }
 
 function normalizeVersion(tagName) {
-  return String(tagName).replace(/^v/u, '').trim();
+  return String(tagName).trim().replace(/^v/iu, '');
 }
 
 module.exports = { GitHubClient, normalizeVersion };

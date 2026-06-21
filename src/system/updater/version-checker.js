@@ -8,8 +8,8 @@ const semver = require('semver');
  * @returns {{ hasUpdate: boolean; current: string; latest: string; isMajor?: boolean; diff?: semver.ReleaseType | null }}
  */
 function compareVersions(current, latest) {
-  const cleanCurrent = semver.clean(current) || current;
-  const cleanLatest = semver.clean(latest) || latest;
+  const cleanCurrent = normalizeVersion(current);
+  const cleanLatest = normalizeVersion(latest);
 
   if (!semver.valid(cleanCurrent)) {
     throw new Error(`Current version "${current}" is not valid semver`);
@@ -34,6 +34,11 @@ function compareVersions(current, latest) {
     isMajor: semver.major(cleanLatest) > semver.major(cleanCurrent),
     diff: semver.diff(cleanCurrent, cleanLatest),
   };
+}
+
+function normalizeVersion(version) {
+  const normalized = String(version).trim().replace(/^v/iu, '');
+  return semver.clean(normalized) || normalized;
 }
 
 module.exports = { compareVersions };
