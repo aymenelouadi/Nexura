@@ -27,7 +27,7 @@ import {
   TabsTrigger,
   Textarea,
 } from '@nexura/ui';
-import { formatLogMessage, resolveVariable, type LogType, type LogVariables } from '@nexura/plugin-logs';
+import { formatLogMessage, resolveVariable, type LogVariables } from '@nexura/shared';
 import type { CoreMessage, GuildPlugin } from '@nexura/types';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -1209,7 +1209,7 @@ function buildPreviewMessage(log: LogDefinition, config: ResolvedLogConfig, _set
   const testPrefix = isTest ? '[TEST] ' : '';
   const variables = buildPreviewVariables(log.sample);
   return formatLogMessage({
-    type: log.id as LogType,
+    type: log.id,
     title: `${testPrefix}${config.title}`,
     description: config.description,
     footer: config.footer,
