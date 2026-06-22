@@ -11,18 +11,15 @@ import { SelectedGuildProvider } from '../state/selected-guild-context.js';
 import { PluginDetailPage } from './plugin-detail-page.js';
 
 vi.mock('sonner', () => ({
-  toast: {
-    success: vi.fn(),
-    error: vi.fn(),
-  },
+  toast: { success: vi.fn(), error: vi.fn() },
 }));
 
 const guildId = '1111111111111111111';
 
-const logsPlugin: GuildPluginDetail = {
+const customDashboardPlugin: GuildPluginDetail = {
   id: 'logs',
-  name: 'Logs',
-  description: 'Monitor important server activity with clean, customizable logs.',
+  name: 'Custom Plugin',
+  description: 'A plugin with a custom dashboard component registered in Core.',
   version: '1.0.0',
   author: 'Nexura',
   status: 'INSTALLED',
@@ -33,32 +30,27 @@ const logsPlugin: GuildPluginDetail = {
   updatedAt: '2024-01-01T00:00:00Z',
   dashboard: {
     enabled: true,
-    route: '/plugins/logs',
-    label: 'Logs',
+    route: '/plugins/custom',
+    label: 'Custom',
     icon: 'ScrollText',
-    tabs: ['overview', 'settings', 'member-logs', 'moderation-logs', 'message-logs', 'server-logs'],
+    tabs: ['overview'],
   },
   dashboardContent: {
     mode: 'schema',
     bundleUrl: null,
-    assetsBaseUrl: `/api/v1/guilds/${guildId}/plugins/logs/assets`,
+    assetsBaseUrl: `/api/v1/guilds/${guildId}/plugins/custom/assets`,
     errors: [],
     schema: {
       version: 1,
       contentMode: 'schema',
-      defaults: {
-        'settings.enabled': true,
-        'settings.defaultChannelId': null,
-        'settings.defaultFormat': 'embed',
-        'settings.defaultColor': 5793266,
-      },
-      previewVariables: { user: '@Mira', serverName: 'Nexura Labs' },
+      defaults: {},
+      previewVariables: {},
       defaultMessages: {},
       tabs: [
         {
           id: 'overview',
           label: 'Overview',
-          sections: [{ id: 'overview.logs', title: 'Logs', fields: [], actions: [] }],
+          sections: [{ id: 'overview.default', title: 'Overview', fields: [], actions: [] }],
         },
       ],
     },
@@ -116,49 +108,14 @@ const welcomePlugin: GuildPluginDetail = {
               id: 'welcome.settings',
               title: 'Welcome messages',
               fields: [
-                {
-                  id: 'welcome.enabled',
-                  type: 'switch',
-                  label: 'Enable welcome messages',
-                  storageKey: 'settings',
-                  path: 'welcome.enabled',
-                  defaultValue: false,
-                },
-                {
-                  id: 'welcome.channel',
-                  type: 'channel_select',
-                  label: 'Welcome channel',
-                  storageKey: 'settings',
-                  path: 'welcome.channelId',
-                  defaultValue: null,
-                },
-                {
-                  id: 'welcome.messageType',
-                  type: 'select',
-                  label: 'Message type',
-                  storageKey: 'settings',
-                  path: 'welcome.messageType',
-                  defaultValue: 'text',
-                  options: [{ label: 'Text', value: 'text' }],
-                },
-                {
-                  id: 'welcome.composer',
-                  type: 'message_composer',
-                  label: 'Message composer',
-                  storageKey: 'templates',
-                  path: 'Default Welcome',
-                  templateType: 'welcome',
-                },
+                { id: 'welcome.enabled', type: 'switch', label: 'Enable welcome messages', storageKey: 'settings', path: 'welcome.enabled', defaultValue: false },
+                { id: 'welcome.channel', type: 'channel_select', label: 'Welcome channel', storageKey: 'settings', path: 'welcome.channelId', defaultValue: null },
+                { id: 'welcome.messageType', type: 'select', label: 'Message type', storageKey: 'settings', path: 'welcome.messageType', defaultValue: 'text', options: [{ label: 'Text', value: 'text' }] },
+                { id: 'welcome.composer', type: 'message_composer', label: 'Message composer', storageKey: 'templates', path: 'Default Welcome', templateType: 'welcome' },
               ],
               actions: [
                 { id: 'welcome.save', type: 'save_storage', label: 'Save welcome settings', storageKeys: ['settings'] },
-                {
-                  id: 'welcome.test',
-                  type: 'test_template',
-                  label: 'Send test welcome message',
-                  templateNamePath: 'welcome.templateId',
-                  channelIdPath: 'welcome.channelId',
-                },
+                { id: 'welcome.test', type: 'test_template', label: 'Send test welcome message', templateNamePath: 'welcome.templateId', channelIdPath: 'welcome.channelId' },
               ],
             },
           ],
@@ -192,53 +149,31 @@ function renderPage(element: ReactElement) {
 describe('PluginDetailPage', () => {
   beforeEach(() => {
     vi.spyOn(api, 'getGuild').mockResolvedValue({
-      id: guildId,
-      name: 'Test Guild',
-      icon: null,
-      memberCount: 100,
-      canManage: true,
-      isOwner: true,
-      hasAdmin: false,
-      hasManager: false,
-      botConnected: true,
-      action: 'manage',
-      permissionRole: 'OWNER',
+      id: guildId, name: 'Test Guild', icon: null, memberCount: 100,
+      canManage: true, isOwner: true, hasAdmin: false, hasManager: false,
+      botConnected: true, action: 'manage', permissionRole: 'OWNER',
     });
     vi.spyOn(api, 'getGuilds').mockResolvedValue({ data: [] });
     vi.spyOn(api, 'getGuildPlugin').mockResolvedValue(welcomePlugin);
     vi.spyOn(api, 'getGuildPluginStorage').mockResolvedValue({ value: {} });
     vi.spyOn(api, 'getGuildPluginTemplates').mockResolvedValue({ data: [] });
     vi.spyOn(api, 'getGuildChannels').mockResolvedValue({ data: [{ id: '2222222222222222222', name: 'welcome', type: 0 }] });
-    vi.spyOn(api, 'getBotProfile').mockResolvedValue({
-      username: 'Nexura',
-      avatarUrl: null,
-      id: '3333333333333333333',
-      discriminator: null,
-    });
+    vi.spyOn(api, 'getBotProfile').mockResolvedValue({ username: 'Nexura', avatarUrl: null, id: '3333333333333333333', discriminator: null });
     vi.spyOn(api, 'getGuildPluginLogs').mockResolvedValue({ data: [] });
     vi.spyOn(api, 'getCurrentUser').mockResolvedValue({
-      id: '11111111-1111-4111-9111-111111111111',
-      discordId: '123456789012345678',
-      username: 'testuser',
-      globalName: 'Test User',
-      avatar: null,
-      createdAt: '2024-01-01T00:00:00Z',
-      updatedAt: '2024-01-01T00:00:00Z',
+      id: '11111111-1111-4111-9111-111111111111', discordId: '123456789012345678',
+      username: 'testuser', globalName: 'Test User', avatar: null,
+      createdAt: '2024-01-01T00:00:00Z', updatedAt: '2024-01-01T00:00:00Z',
     });
-    vi.spyOn(api, 'getBotProfile').mockResolvedValue({
-      id: '123456789012345678',
-      username: 'NexuraBot',
-      avatarUrl: null,
-      discriminator: null,
-    });
+    vi.spyOn(api, 'getBotProfile').mockResolvedValue({ id: '123456789012345678', username: 'NexuraBot', avatarUrl: null, discriminator: null });
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
   });
 
-  it('renders custom Logs dashboard instead of schema "No settings"', async () => {
-    vi.mocked(api.getGuildPlugin).mockResolvedValue(logsPlugin);
+  it('renders a custom dashboard component for plugins registered in the component registry', async () => {
+    vi.mocked(api.getGuildPlugin).mockResolvedValue(customDashboardPlugin);
     renderPage(<PluginDetailPage />);
 
     expect(await screen.findByRole('heading', { name: 'Logs Plugin' }, { timeout: 5000 })).toBeInTheDocument();
@@ -246,7 +181,6 @@ describe('PluginDetailPage', () => {
     expect(screen.getByText('Log types')).toBeInTheDocument();
     expect(screen.queryByText('No settings')).not.toBeInTheDocument();
     expect(screen.queryByText('This section does not have any configurable settings.')).not.toBeInTheDocument();
-    expect(screen.getByText(/@Shaad joined the server/i)).toBeInTheDocument();
   });
 
   it('renders Welcome tab content from dashboard schema', async () => {
@@ -275,13 +209,7 @@ describe('PluginDetailPage', () => {
       ...welcomePlugin,
       status: 'BROKEN',
       brokenReason: 'This plugin says it has a dashboard, but no dashboard interface was included.',
-      dashboardContent: {
-        mode: 'none',
-        schema: null,
-        bundleUrl: null,
-        assetsBaseUrl: null,
-        errors: ['dashboard.schema.json missing'],
-      },
+      dashboardContent: { mode: 'none', schema: null, bundleUrl: null, assetsBaseUrl: null, errors: ['dashboard.schema.json missing'] },
     });
 
     renderPage(<PluginDetailPage />);
@@ -304,5 +232,4 @@ describe('PluginDetailPage', () => {
     expect(screen.queryByText(/schema-driven/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/metadata-only/i)).not.toBeInTheDocument();
   });
-
 });

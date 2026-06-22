@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@hookform/resolvers": "^5.4.0",
+    "@nexura/plugin-logs": "workspace:*",
     "@nexura/shared": "workspace:*",
     "@nexura/types": "workspace:*",
     "@nexura/ui": "workspace:*",

@@ -68,7 +68,7 @@ describe('PluginTestService', () => {
 
     const service = new PluginTestService(createEnvironment('bot-token'), repository);
     const result = await service.sendMessage(
-      { guildId: '1111111111111111111', pluginId: 'logs' },
+      { guildId: '1111111111111111111', pluginId: 'test-plugin' },
       {
         channelId: '2222222222222222222',
         message: { type: 'embed', title: '[TEST] Member Joined', description: 'A member joined.', color: 0x22c55e },

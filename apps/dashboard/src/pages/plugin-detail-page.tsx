@@ -25,10 +25,9 @@ import {
   UploadIcon,
 } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Component, type ReactNode, useState } from 'react';
+import { Component, lazy, type ComponentType, type ReactNode, useState } from 'react';
 
 import { ErrorState } from '../components/error-state.js';
-import { LogsPluginDashboard } from '../components/logs-plugin-dashboard.js';
 import { PageHeader } from '../components/page-header.js';
 import { PluginDashboardShell } from '../components/plugin-dashboard-shell.js';
 import { PluginSchemaDashboard } from '../components/plugin-schema-dashboard.js';
@@ -37,6 +36,18 @@ import { guildPluginQuery } from '../hooks/queries.js';
 import { useGuildWorkspace } from '../hooks/use-guild-workspace.js';
 import { api } from '../lib/api-client.js';
 import { getGuildPluginsPath } from '../lib/guild-actions.js';
+
+const PLUGIN_DASHBOARD_COMPONENTS: Record<string, ComponentType<{ guildId: string; plugin: GuildPlugin }>> = {
+  logs: lazy(() =>
+    import('../components/logs-plugin-dashboard.js').then((m) => ({
+      default: m.LogsPluginDashboardWrapper,
+    })),
+  ),
+};
+
+function getCustomDashboardComponent(pluginId: string): ComponentType<{ guildId: string; plugin: GuildPlugin }> | undefined {
+  return PLUGIN_DASHBOARD_COMPONENTS[pluginId];
+}
 
 export function PluginDetailPage() {
   const navigate = useNavigate();
@@ -128,8 +139,12 @@ export function PluginDetailPage() {
   }
 
   const schema = plugin.dashboardContent.schema;
-  const isLogsPlugin = plugin.id === 'logs';
-  const pluginTabs = isLogsPlugin ? ['overview'] : plugin.dashboard.tabs.length ? plugin.dashboard.tabs : (schema?.tabs.map((tab) => tab.id) ?? ['overview']);
+  const hasCustomDashboard = Boolean(getCustomDashboardComponent(plugin.id));
+  const pluginTabs = hasCustomDashboard
+    ? ['overview']
+    : plugin.dashboard.tabs.length
+      ? plugin.dashboard.tabs
+      : (schema?.tabs.map((tab) => tab.id) ?? ['overview']);
   const schemaContentMap = schema
     ? Object.fromEntries(
         schema.tabs.map((tab) => [
@@ -140,7 +155,9 @@ export function PluginDetailPage() {
     : {};
   const contentMap: Record<string, ReactNode> = {
     ...schemaContentMap,
-    overview: isLogsPlugin ? <LogsPluginDashboard guildId={guildId} plugin={plugin} /> : <OverviewPlaceholder plugin={plugin} />,
+    overview: hasCustomDashboard
+      ? (() => { const Component = getCustomDashboardComponent(plugin.id)!; return <Component guildId={guildId} plugin={plugin} />; })()
+      : <OverviewPlaceholder plugin={plugin} />,
     settings: <SettingsPlaceholder plugin={plugin} />,
     commands: schemaContentMap.commands ?? <CommandsPlaceholder plugin={plugin} />,
     logs: <PluginLogsTab guildId={guildId} pluginId={pluginId} />,
