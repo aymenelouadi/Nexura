@@ -40,7 +40,7 @@ import { getGuildPluginsPath } from '../lib/guild-actions.js';
 const PLUGIN_DASHBOARD_COMPONENTS: Record<string, ComponentType<{ guildId: string; plugin: GuildPlugin }>> = {
   logs: lazy(() =>
     import('../components/logs-plugin-dashboard.js').then((m) => ({
-      default: m.LogsPluginDashboardWrapper,
+      default: m.LogsPluginDashboard,
     })),
   ),
 };

@@ -2,6 +2,7 @@ export * from './command-registry.js';
 export * from './content-utils.js';
 export * from './discord-payload.js';
 export * from './event-registry.js';
+export * from './log-formatter.js';
 export * from './logger.js';
 export * from './message-builder.js';
 export * from './permission-service.js';
