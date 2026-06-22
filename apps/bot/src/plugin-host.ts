@@ -287,8 +287,8 @@ function toDiscordOptionType(type: 'STRING' | 'BOOLEAN' | 'INTEGER'): Applicatio
 }
 
 async function listPluginDirectories(logger: Logger): Promise<string[]> {
-  const officialDirectories = await listChildDirectories(PLUGINS_DIRECTORY, new Set(['installed']), logger);
-  const installedDirectories = await listChildDirectories(INSTALLED_PLUGINS_DIRECTORY, new Set(), logger);
+  const officialDirectories = await listChildDirectories(PLUGINS_DIRECTORY, new Set(['installed', 'node_modules']), logger);
+  const installedDirectories = await listChildDirectories(INSTALLED_PLUGINS_DIRECTORY, new Set(['node_modules']), logger);
   if (installedDirectories.length === 0) {
     const listing = await safeReaddir(INSTALLED_PLUGINS_DIRECTORY);
     logger.info({ installedDir: INSTALLED_PLUGINS_DIRECTORY, listing }, 'Installed plugin directory listing');

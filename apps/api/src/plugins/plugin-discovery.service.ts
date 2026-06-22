@@ -66,8 +66,8 @@ export class PluginDiscoveryService {
       }
     };
 
-    await scan(PLUGIN_DIRECTORY, new Set(['installed']));
-    await scan(INSTALLED_PLUGIN_DIRECTORY);
+    await scan(PLUGIN_DIRECTORY, new Set(['installed', 'node_modules']));
+    await scan(INSTALLED_PLUGIN_DIRECTORY, new Set(['node_modules']));
 
     return [...new Set(directories)].sort();
   }
