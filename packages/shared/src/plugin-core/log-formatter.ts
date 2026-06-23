@@ -128,7 +128,7 @@ export function resolveTemplate(template: string, variables: LogVariables): stri
 export function formatLogMessage(options: FormatterOptions): FormattedLog {
   const { format, title, description, footer, color, showTimestamp, showAvatar, variables } = {
     ...options,
-    description: sanitizeContent(options.description),
+    description: sanitizeContent(options.description) ?? '',
   };
 
   const resolvedTitle = resolveTemplate(title, variables);

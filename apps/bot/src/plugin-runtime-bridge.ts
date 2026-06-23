@@ -11,7 +11,7 @@ import {
   type PluginStateReader,
 } from '@nexura/shared';
 import type { PluginLogSettings } from '@nexura/types';
-import type { Client, ClientEvents } from 'discord.js';
+import type { Client, ClientEvents, Guild, Message, PartialMessage, TextBasedChannel } from 'discord.js';
 import { and, eq } from 'drizzle-orm';
 import type { Logger } from 'pino';
 
@@ -161,13 +161,7 @@ export function registerPluginEventBridge(
     client,
     'messageCreate',
     'messageCreate',
-    (message) => ({
-      guildId: message.guildId ?? undefined,
-      channelId: message.channelId,
-      messageId: message.id,
-      authorId: message.author.id,
-      content: message.content,
-    }),
+    (message) => buildMessagePayload(message),
     runtime,
     logger,
   );
@@ -208,15 +202,7 @@ export function registerPluginEventBridge(
     client,
     'messageDelete',
     'messageDelete',
-    (message) => ({
-      guildId: message.guildId ?? undefined,
-      channelId: message.channelId,
-      messageId: message.id,
-      authorId: message.author?.id,
-      authorName: message.author?.username,
-      authorDisplayName: message.author?.globalName ?? message.author?.displayName ?? message.author?.username,
-      content: message.content,
-    }),
+    (message) => buildMessagePayload(message),
     runtime,
     logger,
   );
@@ -225,14 +211,11 @@ export function registerPluginEventBridge(
     'messageUpdate',
     'messageUpdate',
     (oldMessage, newMessage) => ({
-      guildId: newMessage.guildId ?? undefined,
-      channelId: newMessage.channelId,
-      messageId: newMessage.id,
-      authorId: newMessage.author?.id,
-      authorName: newMessage.author?.username,
-      authorDisplayName: newMessage.author?.globalName ?? newMessage.author?.displayName ?? newMessage.author?.username,
+      ...buildMessagePayload(newMessage),
       oldContent: oldMessage.content,
-      newContent: newMessage.content,
+      oldAuthorId: oldMessage.author?.id,
+      oldAuthorName: oldMessage.author?.username,
+      oldCreatedTimestamp: oldMessage.createdTimestamp,
     }),
     runtime,
     logger,
@@ -338,4 +321,38 @@ function bridge<K extends keyof ClientEvents>(
 
 function compact(payload: PluginEventPayload): PluginEventPayload {
   return Object.fromEntries(Object.entries(payload).filter(([, value]) => value !== undefined));
+}
+
+function resolveMessageGuild(message: Message | PartialMessage): Guild | undefined {
+  return message.guild ?? undefined;
+}
+
+function resolveMessageChannelName(message: Message | PartialMessage): string | undefined {
+  const channel = message.channel as TextBasedChannel | undefined;
+  if (!channel) return undefined;
+  if ('name' in channel && typeof channel.name === 'string') return channel.name;
+  return undefined;
+}
+
+function buildMessagePayload(message: Message | PartialMessage): PluginEventPayload {
+  const guild = resolveMessageGuild(message);
+  const author = message.author;
+  return compact({
+    guildId: message.guildId ?? undefined,
+    serverId: message.guildId ?? undefined,
+    serverName: guild?.name,
+    serverIcon: guild?.iconURL({ size: 128 }) ?? null,
+    memberCount: guild?.memberCount,
+    channelId: message.channelId,
+    channelName: resolveMessageChannelName(message),
+    channelType: message.channel?.type,
+    messageId: message.id,
+    authorId: author?.id,
+    authorName: author?.username,
+    authorDisplayName: author?.globalName ?? author?.displayName ?? author?.username,
+    authorAvatar: author?.displayAvatarURL({ size: 128 }),
+    authorBot: author?.bot,
+    content: message.content,
+    createdTimestamp: message.createdTimestamp,
+  });
 }

@@ -9,8 +9,8 @@ const SECRET_PATTERNS = [
   /mongodb:\/\/[^\s]+/giu,
 ];
 
-export function sanitizeContent(content: string | undefined): string {
-  if (!content) return 'Content unavailable';
+export function sanitizeContent(content: string | undefined): string | undefined {
+  if (!content) return undefined;
   let sanitized = content;
   for (const pattern of SECRET_PATTERNS) {
     sanitized = sanitized.replace(pattern, '[REDACTED]');
@@ -18,7 +18,7 @@ export function sanitizeContent(content: string | undefined): string {
   if (sanitized.length > MAX_CONTENT_LENGTH) {
     sanitized = `${sanitized.slice(0, MAX_CONTENT_LENGTH)}…`;
   }
-  return sanitized || 'Content unavailable';
+  return sanitized || undefined;
 }
 
 export function resolveTemplateString(
